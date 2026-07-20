@@ -1,0 +1,79 @@
+# CI du serveur Assistant Financier — s'exécute à chaque push et sur chaque pull request.
+# Résultats : onglet "Actions" du repo GitHub (✅/❌ aussi visible sur chaque commit).
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  verifications:
+    name: Types, migrations & schéma
+    runs-on: ubuntu-latest
+
+    # Base PostgreSQL jetable, identique à celle du docker-compose
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: assistant_financier_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d assistant_financier_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/assistant_financier_ci?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Génération du client Prisma
+        run: npx prisma generate
+
+      - name: Vérification des types (tsc)
+        run: npm run typecheck
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Formatage (Prettier)
+        run: npm run format:check
+
+      - name: Les migrations s'appliquent sur une base vierge
+        run: npx prisma migrate deploy
+
+      # Attrape le classique "j'ai modifié schema.prisma mais oublié la migration" :
+      # compare la base (= les migrations appliquées) au schéma. Diff non vide → échec.
+      - name: schema.prisma et migrations synchronisés
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      # Les tests signent de vrais JWT : on génère une paire de clés éphémère
+      # (le sed retire les guillemets, GITHUB_ENV les prendrait au pied de la lettre).
+      - name: Clés JWT éphémères pour les tests
+        run: node scripts/generer-cles.js | sed 's/^\(JWT_[A-Z_]*\)="\(.*\)"$/\1=\2/' >> "$GITHUB_ENV"
+
+      # Suite complète : unitaires + API (Supertest sur une base dédiée *_test,
+      # créée/migrée/seedée automatiquement par le globalSetup de Vitest).
+      - name: Tests (Vitest + Supertest)
+        run: npm test
+
+  image-docker:
+    name: Image Docker de production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build de l'image prod
+        run: docker build --target prod -t assistant-financier-server:ci .

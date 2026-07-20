@@ -1,0 +1,35 @@
+{
+  // Visit https://aka.ms/tsconfig to read more about this file
+  "compilerOptions": {
+    // File Layout — rootDir "." car le client Prisma est généré dans ./generated
+    // (hors de src/) et doit être compilé avec l'app. Sortie : dist/src + dist/generated.
+    "rootDir": ".",
+    "outDir": "./dist",
+
+    // Environment Settings — serveur Node (ESM), lancé par tsx en dev, node en prod
+    "module": "nodenext",
+    "target": "es2023",
+    "lib": ["esnext"],
+    "types": ["node"],
+
+    // Other Outputs
+    "sourceMap": true,
+
+    // Stricter Typechecking Options
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // Recommended Options
+    "strict": true,
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  },
+  // prisma.config.ts est volontairement exclu : la CLI Prisma le charge elle-même,
+  // il n'a pas à être compilé dans dist/.
+  "include": ["src", "generated", "prisma", "tests", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

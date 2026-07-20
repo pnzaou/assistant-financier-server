@@ -1,0 +1,13 @@
+node_modules
+dist
+generated
+.env
+.git
+.gitignore
+Dockerfile
+docker-compose*.yml
+.dockerignore
+README.md
+*.jpeg
+*.jpg
+*.png

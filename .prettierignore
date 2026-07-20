@@ -1,0 +1,8 @@
+node_modules
+dist
+generated
+package-lock.json
+prisma/migrations
+*.jpeg
+*.jpg
+*.png

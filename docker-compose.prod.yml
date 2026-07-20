@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────────
+# Environnement de PRODUCTION (image compilée, pas de hot reload).
+#
+#   docker compose -f docker-compose.prod.yml up --build -d
+#
+# Les migrations sont appliquées automatiquement au démarrage
+# (prisma migrate deploy, voir Dockerfile cible "prod").
+# ─────────────────────────────────────────────────────────────────
+name: assistant-financier-prod
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # Pas de port publié : la BD n'est joignable que depuis le réseau Docker.
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      target: prod
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-5000}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      CLIENT_URLS: ${CLIENT_URLS:-http://localhost:5173}
+      COOKIE_SECRET: ${COOKIE_SECRET}
+      # Clés JWT RS256 en PEM aplati — mêmes clés à chaque déploiement,
+      # sinon tous les tokens émis sont invalidés.
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+    ports:
+      - "${PORT:-5000}:${PORT:-5000}"
+
+volumes:
+  db_data:

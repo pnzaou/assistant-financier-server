@@ -1,0 +1,11 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+/dist
+
+# Clés JWT (RS256) — dans le .env, jamais commitées.
+# *.key : fichiers intermédiaires produits par la méthode openssl.
+*.key
+/keys

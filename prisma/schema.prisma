@@ -1,0 +1,266 @@
+// Schéma Assistant Financier.
+// Convention (reprise du projet de référence) : tout est en français, ids en
+// UUID v7 (générés côté API par Prisma — Postgres 17 ne sait pas générer de v7).
+//
+// Pas de rôle / RBAC : l'app est mono-rôle (chacun s'inscrit et gère SES
+// finances). Toute la donnée métier s'accroche donc à une Personne.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Comptes (authentification) ──────────────────────────────────
+
+enum StatutCompte {
+  ACTIF
+  SUSPENDU
+  BANNI
+  SUPPRIME
+}
+
+// Le COMPTE d'un utilisateur (identité + authentification).
+model Personne {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  email          String       @unique
+  passwordHash   String
+  nom            String
+  prenom         String
+  telephone      String?
+  statut         StatutCompte @default(ACTIF)
+  emailVerifieLe DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  jetonsAuthentification JetonAuthentification[]
+  sessionsRefresh        SessionRefresh[]
+
+  comptes                 CompteFinancier[]
+  categories              Categorie[]
+  budgets                 Budget[]
+  objectifs               ObjectifEpargne[]
+  transactionsRecurrentes TransactionRecurrente[]
+}
+
+// ─── Authentification ────────────────────────────────────────────
+
+enum TypeJeton {
+  VERIFICATION_EMAIL
+  REINITIALISATION_MOT_DE_PASSE
+}
+
+// Jetons à usage unique envoyés par email (vérification d'adresse,
+// réinitialisation de mot de passe). Seule l'empreinte SHA-256 du jeton
+// est stockée : une fuite de la base ne permet pas de les rejouer.
+model JetonAuthentification {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  personneId String    @db.Uuid
+  type       TypeJeton
+  jetonHash  String    @unique
+  expireLe   DateTime
+  utiliseLe  DateTime?
+  createdAt  DateTime  @default(now())
+
+  personne Personne @relation(fields: [personneId], references: [id], onDelete: Cascade)
+
+  @@index([personneId, type])
+}
+
+// Une session par refresh token (longue durée, stocké hashé). C'est elle qui
+// rend le logout réel : révoquer la session (déconnexion, changement de mot
+// de passe, bannissement) coupe le renouvellement immédiatement, alors que
+// l'access token JWT (15 min) reste sans état.
+model SessionRefresh {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  personneId String    @db.Uuid
+  jetonHash  String    @unique
+  expireLe   DateTime
+  revoqueLe  DateTime?
+  createdAt  DateTime  @default(now())
+
+  personne Personne @relation(fields: [personneId], references: [id], onDelete: Cascade)
+
+  @@index([personneId])
+}
+
+// ─── Domaine : comptes & mouvements ──────────────────────────────
+
+enum TypeCompte {
+  COURANT
+  EPARGNE
+  CARTE_CREDIT
+  ESPECES
+  INVESTISSEMENT
+  AUTRE
+}
+
+// Un compte financier de l'utilisateur. Le solde courant n'est PAS stocké :
+// il se calcule (soldeInitial + somme signée des transactions) dans le service,
+// pour ne jamais désynchroniser.
+model CompteFinancier {
+  id           String     @id @default(uuid(7)) @db.Uuid
+  personneId   String     @db.Uuid
+  nom          String
+  type         TypeCompte @default(COURANT)
+  soldeInitial Decimal    @default(0) @db.Decimal(14, 2)
+  devise       String     @default("EUR") @db.Char(3) // code ISO 4217
+  institution  String?
+  couleur      String?
+  archiveLe    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  personne                Personne                @relation(fields: [personneId], references: [id], onDelete: Cascade)
+  transactions            Transaction[]
+  objectifs               ObjectifEpargne[]
+  transactionsRecurrentes TransactionRecurrente[]
+
+  @@index([personneId])
+}
+
+enum TypeCategorie {
+  DEPENSE
+  REVENU
+}
+
+// Poste de dépense/revenu. personneId NULL = catégorie SYSTÈME (seedée,
+// partagée par tous) ; sinon catégorie personnelle. Hiérarchie possible via
+// parentId (ex. « Alimentation » > « Restaurants »).
+model Categorie {
+  id         String        @id @default(uuid(7)) @db.Uuid
+  personneId String?       @db.Uuid
+  nom        String
+  type       TypeCategorie
+  parentId   String?       @db.Uuid
+  icone      String?
+  couleur    String?
+  createdAt  DateTime      @default(now())
+
+  personne Personne?   @relation(fields: [personneId], references: [id], onDelete: Cascade)
+  parent   Categorie?  @relation("SousCategories", fields: [parentId], references: [id], onDelete: SetNull)
+  enfants  Categorie[] @relation("SousCategories")
+
+  transactions            Transaction[]
+  budgets                 Budget[]
+  transactionsRecurrentes TransactionRecurrente[]
+
+  @@index([personneId, type])
+}
+
+enum TypeTransaction {
+  DEPENSE
+  REVENU
+  TRANSFERT
+}
+
+// Un mouvement. Le montant est toujours POSITIF ; le sens vient de `type`.
+// Un virement interne = 2 transactions liées (une DEPENSE côté source, une
+// REVENU côté destination) reliées par transactionLieeId (relation 1-1).
+model Transaction {
+  id                String          @id @default(uuid(7)) @db.Uuid
+  compteId          String          @db.Uuid
+  categorieId       String?         @db.Uuid
+  montant           Decimal         @db.Decimal(14, 2)
+  type              TypeTransaction
+  libelle           String
+  note              String?
+  dateOperation     DateTime        @db.Date
+  pointee           Boolean         @default(false)
+  transactionLieeId String?         @unique @db.Uuid
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  compte    CompteFinancier @relation(fields: [compteId], references: [id], onDelete: Cascade)
+  categorie Categorie?      @relation(fields: [categorieId], references: [id], onDelete: SetNull)
+
+  transactionLiee    Transaction? @relation("Virement", fields: [transactionLieeId], references: [id], onDelete: SetNull)
+  transactionLieePar Transaction? @relation("Virement")
+
+  @@index([compteId, dateOperation])
+  @@index([categorieId])
+}
+
+// ─── Domaine : budgets & objectifs ───────────────────────────────
+
+enum PeriodeBudget {
+  HEBDOMADAIRE
+  MENSUEL
+  ANNUEL
+}
+
+// Plafond de dépense par catégorie et par période. La consommation n'est pas
+// stockée : elle se calcule à partir des transactions de la période courante.
+model Budget {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  personneId     String        @db.Uuid
+  categorieId    String        @db.Uuid
+  montantPlafond Decimal       @db.Decimal(12, 2)
+  periode        PeriodeBudget @default(MENSUEL)
+  actif          Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  personne  Personne  @relation(fields: [personneId], references: [id], onDelete: Cascade)
+  categorie Categorie @relation(fields: [categorieId], references: [id], onDelete: Cascade)
+
+  @@unique([personneId, categorieId, periode])
+}
+
+enum StatutObjectif {
+  EN_COURS
+  ATTEINT
+  ABANDONNE
+}
+
+// Projet d'épargne (ex. « Vacances », « Fonds d'urgence »).
+model ObjectifEpargne {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  personneId    String         @db.Uuid
+  nom           String
+  montantCible  Decimal        @db.Decimal(12, 2)
+  montantActuel Decimal        @default(0) @db.Decimal(12, 2)
+  dateEcheance  DateTime?      @db.Date
+  compteId      String?        @db.Uuid
+  statut        StatutObjectif @default(EN_COURS)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  personne Personne         @relation(fields: [personneId], references: [id], onDelete: Cascade)
+  compte   CompteFinancier? @relation(fields: [compteId], references: [id], onDelete: SetNull)
+
+  @@index([personneId, statut])
+}
+
+enum Frequence {
+  HEBDOMADAIRE
+  MENSUELLE
+  TRIMESTRIELLE
+  ANNUELLE
+}
+
+// Mouvement récurrent connu (abonnement, salaire, loyer…). Sert aux prévisions
+// et à la détection d'abonnements côté analyses.
+model TransactionRecurrente {
+  id                String          @id @default(uuid(7)) @db.Uuid
+  personneId        String          @db.Uuid
+  compteId          String?         @db.Uuid
+  categorieId       String?         @db.Uuid
+  libelle           String
+  montant           Decimal         @db.Decimal(12, 2)
+  type              TypeTransaction @default(DEPENSE)
+  frequence         Frequence
+  prochaineEcheance DateTime        @db.Date
+  actif             Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  personne  Personne         @relation(fields: [personneId], references: [id], onDelete: Cascade)
+  compte    CompteFinancier? @relation(fields: [compteId], references: [id], onDelete: SetNull)
+  categorie Categorie?       @relation(fields: [categorieId], references: [id], onDelete: SetNull)
+
+  @@index([personneId, actif])
+}
