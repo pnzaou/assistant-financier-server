@@ -44,7 +44,15 @@ describe("GET /api/v1/categories", () => {
       .get("/api/v1/categories?type=REVENU")
       .set("Authorization", `Bearer ${token}`);
     expect(reponse.status).toBe(200);
-    expect((reponse.body as { categories: Array<{ type: string; nom: string }> }).categories.every((c) => c.type === "REVENU")).toBe(true);
-    expect((reponse.body as { categories: Array<{ type: string; nom: string }> }).categories.some((c) => c.nom === "Salaire")).toBe(true);
+    expect(
+      (reponse.body as { categories: Array<{ type: string; nom: string }> }).categories.every(
+        (c) => c.type === "REVENU",
+      ),
+    ).toBe(true);
+    expect(
+      (reponse.body as { categories: Array<{ type: string; nom: string }> }).categories.some(
+        (c) => c.nom === "Salaire",
+      ),
+    ).toBe(true);
   });
 });

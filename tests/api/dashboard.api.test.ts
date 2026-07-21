@@ -38,16 +38,13 @@ describe("GET /api/v1/dashboard/soldes", () => {
   it("renvoie le solde de chaque compte et le total global", async () => {
     const { token } = await creerUtilisateur("dashboard@test.local");
     const compteId = await creerCompte(token, 100);
-    await request(app)
-      .post("/api/v1/transactions")
-      .set("Authorization", `Bearer ${token}`)
-      .send({
-        compteId,
-        montant: 40,
-        type: "DEPENSE",
-        libelle: "Courses",
-        dateOperation: "2026-07-20",
-      });
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 40,
+      type: "DEPENSE",
+      libelle: "Courses",
+      dateOperation: "2026-07-20",
+    });
 
     const reponse = await request(app)
       .get("/api/v1/dashboard/soldes")
@@ -66,31 +63,28 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
     const compteId = await creerCompte(token, 0);
     const aujourdhui = new Date().toISOString().slice(0, 10);
 
-    await request(app)
-      .post("/api/v1/transactions")
-      .set("Authorization", `Bearer ${token}`)
-      .send({ compteId, montant: 30, type: "DEPENSE", libelle: "Yango", dateOperation: aujourdhui });
-    await request(app)
-      .post("/api/v1/transactions")
-      .set("Authorization", `Bearer ${token}`)
-      .send({
-        compteId,
-        montant: 20,
-        type: "DEPENSE",
-        libelle: "Yango encore",
-        dateOperation: aujourdhui,
-      });
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 30,
+      type: "DEPENSE",
+      libelle: "Yango",
+      dateOperation: aujourdhui,
+    });
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 20,
+      type: "DEPENSE",
+      libelle: "Yango encore",
+      dateOperation: aujourdhui,
+    });
     // Un revenu ne doit jamais apparaître dans les dépenses.
-    await request(app)
-      .post("/api/v1/transactions")
-      .set("Authorization", `Bearer ${token}`)
-      .send({
-        compteId,
-        montant: 500,
-        type: "REVENU",
-        libelle: "Salaire",
-        dateOperation: aujourdhui,
-      });
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 500,
+      type: "REVENU",
+      libelle: "Salaire",
+      dateOperation: aujourdhui,
+    });
 
     const reponse = await request(app)
       .get("/api/v1/dashboard/depenses-par-categorie")
@@ -133,27 +127,21 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
       .slice(0, 10);
 
     // Dépense datée du mois précédent : ne doit pas être comptée par défaut.
-    await request(app)
-      .post("/api/v1/transactions")
-      .set("Authorization", `Bearer ${token}`)
-      .send({
-        compteId,
-        montant: 999,
-        type: "DEPENSE",
-        libelle: "Yango ancien",
-        dateOperation: dateMoisPrecedent,
-      });
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 999,
+      type: "DEPENSE",
+      libelle: "Yango ancien",
+      dateOperation: dateMoisPrecedent,
+    });
     // Dépense datée d'aujourd'hui : doit être comptée.
-    await request(app)
-      .post("/api/v1/transactions")
-      .set("Authorization", `Bearer ${token}`)
-      .send({
-        compteId,
-        montant: 15,
-        type: "DEPENSE",
-        libelle: "Yango recent",
-        dateOperation: aujourdhui,
-      });
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 15,
+      type: "DEPENSE",
+      libelle: "Yango recent",
+      dateOperation: aujourdhui,
+    });
 
     const reponse = await request(app)
       .get("/api/v1/dashboard/depenses-par-categorie")
@@ -189,16 +177,13 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
       .toISOString()
       .slice(0, 10);
 
-    await request(app)
-      .post("/api/v1/transactions")
-      .set("Authorization", `Bearer ${token}`)
-      .send({
-        compteId,
-        montant: 42,
-        type: "DEPENSE",
-        libelle: "Yango du mois dernier",
-        dateOperation: dateMoisPrecedent,
-      });
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 42,
+      type: "DEPENSE",
+      libelle: "Yango du mois dernier",
+      dateOperation: dateMoisPrecedent,
+    });
 
     // On réutilise premierJourMoisPrecedent (déjà calé sur le jour 1) pour
     // dériver le début et la fin du mois précédent, sans recalculer
