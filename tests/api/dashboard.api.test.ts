@@ -69,7 +69,7 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
     await request(app)
       .post("/api/v1/transactions")
       .set("Authorization", `Bearer ${token}`)
-      .send({ compteId, montant: 30, type: "DEPENSE", libelle: "Uber", dateOperation: aujourdhui });
+      .send({ compteId, montant: 30, type: "DEPENSE", libelle: "Yango", dateOperation: aujourdhui });
     await request(app)
       .post("/api/v1/transactions")
       .set("Authorization", `Bearer ${token}`)
@@ -77,7 +77,7 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
         compteId,
         montant: 20,
         type: "DEPENSE",
-        libelle: "Uber encore",
+        libelle: "Yango encore",
         dateOperation: aujourdhui,
       });
     // Un revenu ne doit jamais apparaître dans les dépenses.
@@ -140,7 +140,7 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
         compteId,
         montant: 999,
         type: "DEPENSE",
-        libelle: "Uber ancien",
+        libelle: "Yango ancien",
         dateOperation: dateMoisPrecedent,
       });
     // Dépense datée d'aujourd'hui : doit être comptée.
@@ -151,7 +151,7 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
         compteId,
         montant: 15,
         type: "DEPENSE",
-        libelle: "Uber recent",
+        libelle: "Yango recent",
         dateOperation: aujourdhui,
       });
 
@@ -196,7 +196,7 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
         compteId,
         montant: 42,
         type: "DEPENSE",
-        libelle: "Uber du mois dernier",
+        libelle: "Yango du mois dernier",
         dateOperation: dateMoisPrecedent,
       });
 

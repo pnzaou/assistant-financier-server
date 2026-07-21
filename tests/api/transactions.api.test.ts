@@ -54,7 +54,7 @@ describe("POST /api/v1/transactions", () => {
         compteId,
         montant: 15.5,
         type: "DEPENSE",
-        libelle: "Uber vers l'aéroport",
+        libelle: "Yango vers l'aéroport",
         dateOperation: "2026-07-20",
       });
 

@@ -19,7 +19,7 @@ describe("deviner", () => {
   it("reconnaît un mot-clé de dépense (insensible à la casse)", async () => {
     vi.mocked(trouverSystemeParNomEtType).mockResolvedValueOnce(categorieAvecId("cat-transport"));
 
-    const resultat = await deviner("UBER *TRIP 12H30", "DEPENSE");
+    const resultat = await deviner("YANGO *TRIP 12H30", "DEPENSE");
 
     expect(resultat).toBe("cat-transport");
     expect(trouverSystemeParNomEtType).toHaveBeenCalledWith("Transport", "DEPENSE");
