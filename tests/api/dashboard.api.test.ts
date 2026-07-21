@@ -63,16 +63,13 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
     const compteId = await creerCompte(token, 0);
     const aujourdhui = new Date().toISOString().slice(0, 10);
 
-    await request(app)
-      .post("/api/v1/transactions")
-      .set("Authorization", `Bearer ${token}`)
-      .send({
-        compteId,
-        montant: 30,
-        type: "DEPENSE",
-        libelle: "Yango",
-        dateOperation: aujourdhui,
-      });
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 30,
+      type: "DEPENSE",
+      libelle: "Yango",
+      dateOperation: aujourdhui,
+    });
     await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
       compteId,
       montant: 20,
