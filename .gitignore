@@ -9,3 +9,6 @@ node_modules
 # *.key : fichiers intermédiaires produits par la méthode openssl.
 *.key
 /keys
+
+# Scratch state for the subagent-driven-development skill (progress ledger, briefs).
+/.superpowers/
