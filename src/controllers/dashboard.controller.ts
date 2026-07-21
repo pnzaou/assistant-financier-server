@@ -12,7 +12,7 @@ function utilisateurConnecte(req: Request): { id: string } {
 export async function soldes(req: Request, res: Response): Promise<void> {
   const utilisateur = utilisateurConnecte(req);
   const resultat = await dashboardService.obtenirSoldes(utilisateur.id);
-  res.json(resultat);
+  res.json({ soldes: resultat });
 }
 
 export async function depensesParCategorie(req: Request, res: Response): Promise<void> {

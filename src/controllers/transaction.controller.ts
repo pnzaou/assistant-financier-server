@@ -48,7 +48,7 @@ export async function lister(req: Request, res: Response): Promise<void> {
     limite: req.query.limite ? Number(req.query.limite) : 20,
   };
   const resultat = await transactionService.listerTransactions(utilisateur.id, filtres);
-  res.json(resultat);
+  res.json({ transactions: resultat });
 }
 
 export async function obtenir(req: Request, res: Response): Promise<void> {

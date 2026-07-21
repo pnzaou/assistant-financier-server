@@ -188,8 +188,8 @@ describe("GET /api/v1/transactions", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(reponse.status).toBe(200);
-    expect(reponse.body.total).toBe(3);
-    expect(reponse.body.items).toHaveLength(2);
+    expect(reponse.body.transactions.total).toBe(3);
+    expect(reponse.body.transactions.items).toHaveLength(2);
   });
 
   it("refuse un compteId appartenant à un autre utilisateur (404)", async () => {

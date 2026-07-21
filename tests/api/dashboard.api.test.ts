@@ -54,9 +54,9 @@ describe("GET /api/v1/dashboard/soldes", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(reponse.status).toBe(200);
-    expect(reponse.body.comptes).toHaveLength(1);
-    expect(reponse.body.comptes[0].solde).toBe(60);
-    expect(reponse.body.totalGlobal).toBe(60);
+    expect(reponse.body.soldes.comptes).toHaveLength(1);
+    expect(reponse.body.soldes.comptes[0].solde).toBe(60);
+    expect(reponse.body.soldes.totalGlobal).toBe(60);
   });
 });
 
