@@ -114,9 +114,23 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
     const { token } = await creerUtilisateur("depenses-hors-mois@test.local");
     const compteId = await creerCompte(token, 0);
     const aujourdhui = new Date().toISOString().slice(0, 10);
-    const moisPrecedent = new Date();
-    moisPrecedent.setUTCMonth(moisPrecedent.getUTCMonth() - 1);
-    const dateMoisPrecedent = moisPrecedent.toISOString().slice(0, 10);
+    const maintenant = new Date();
+    // On se cale toujours sur le jour 1 du mois précédent avant de faire
+    // de l'arithmétique de mois, pour éviter tout débordement de date
+    // (ex: le 31 mars - 1 mois ne doit jamais retomber en mars).
+    const premierJourMoisPrecedent = new Date(
+      Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth() - 1, 1),
+    );
+    // Le jour 15 existe dans tous les mois, quelle que soit sa longueur.
+    const dateMoisPrecedent = new Date(
+      Date.UTC(
+        premierJourMoisPrecedent.getUTCFullYear(),
+        premierJourMoisPrecedent.getUTCMonth(),
+        15,
+      ),
+    )
+      .toISOString()
+      .slice(0, 10);
 
     // Dépense datée du mois précédent : ne doit pas être comptée par défaut.
     await request(app)
@@ -157,9 +171,23 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
   it("les paramètres du/au remplacent la période par défaut du mois courant", async () => {
     const { token } = await creerUtilisateur("depenses-du-au@test.local");
     const compteId = await creerCompte(token, 0);
-    const moisPrecedent = new Date();
-    moisPrecedent.setUTCMonth(moisPrecedent.getUTCMonth() - 1);
-    const dateMoisPrecedent = moisPrecedent.toISOString().slice(0, 10);
+    const maintenant = new Date();
+    // On se cale toujours sur le jour 1 du mois précédent avant de faire
+    // de l'arithmétique de mois, pour éviter tout débordement de date
+    // (ex: le 31 mars - 1 mois ne doit jamais retomber en mars).
+    const premierJourMoisPrecedent = new Date(
+      Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth() - 1, 1),
+    );
+    // Le jour 15 existe dans tous les mois, quelle que soit sa longueur.
+    const dateMoisPrecedent = new Date(
+      Date.UTC(
+        premierJourMoisPrecedent.getUTCFullYear(),
+        premierJourMoisPrecedent.getUTCMonth(),
+        15,
+      ),
+    )
+      .toISOString()
+      .slice(0, 10);
 
     await request(app)
       .post("/api/v1/transactions")
@@ -172,10 +200,17 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
         dateOperation: dateMoisPrecedent,
       });
 
-    const du = new Date(Date.UTC(moisPrecedent.getUTCFullYear(), moisPrecedent.getUTCMonth(), 1))
-      .toISOString()
-      .slice(0, 10);
-    const au = new Date(Date.UTC(moisPrecedent.getUTCFullYear(), moisPrecedent.getUTCMonth() + 1, 0))
+    // On réutilise premierJourMoisPrecedent (déjà calé sur le jour 1) pour
+    // dériver le début et la fin du mois précédent, sans recalculer
+    // "mois courant - 1" séparément.
+    const du = premierJourMoisPrecedent.toISOString().slice(0, 10);
+    const au = new Date(
+      Date.UTC(
+        premierJourMoisPrecedent.getUTCFullYear(),
+        premierJourMoisPrecedent.getUTCMonth() + 1,
+        0,
+      ),
+    )
       .toISOString()
       .slice(0, 10);
 
