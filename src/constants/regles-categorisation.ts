@@ -9,24 +9,24 @@ export interface RegleCategorisation {
 
 export const REGLES_CATEGORISATION: RegleCategorisation[] = [
   // Alimentation
-  { motCle: "carrefour", nomCategorie: "Alimentation" },
-  { motCle: "monoprix", nomCategorie: "Alimentation" },
-  { motCle: "leclerc", nomCategorie: "Alimentation" },
+  { motCle: "auchan", nomCategorie: "Alimentation" },
+  { motCle: "hypermaché", nomCategorie: "Alimentation" },
+  { motCle: "marche castor", nomCategorie: "Alimentation" },
   { motCle: "supermarché", nomCategorie: "Alimentation" },
   // Restaurants
   { motCle: "restaurant", nomCategorie: "Restaurants" },
-  { motCle: "mcdonald", nomCategorie: "Restaurants" },
-  { motCle: "deliveroo", nomCategorie: "Restaurants" },
-  { motCle: "uber eats", nomCategorie: "Restaurants" },
+  { motCle: "kfc", nomCategorie: "Restaurants" },
+  { motCle: "pizza", nomCategorie: "Restaurants" },
+  { motCle: "grill time", nomCategorie: "Restaurants" },
   // Transport
-  { motCle: "uber", nomCategorie: "Transport" },
-  { motCle: "sncf", nomCategorie: "Transport" },
+  { motCle: "yango", nomCategorie: "Transport" },
+  { motCle: "yassir", nomCategorie: "Transport" },
   { motCle: "essence", nomCategorie: "Transport" },
-  { motCle: "station-service", nomCategorie: "Transport" },
+  { motCle: "dem dikk", nomCategorie: "Transport" },
   // Logement
   { motCle: "loyer", nomCategorie: "Logement" },
-  { motCle: "edf", nomCategorie: "Logement" },
-  { motCle: "électricité", nomCategorie: "Logement" },
+  { motCle: "woyofal", nomCategorie: "Logement" },
+  { motCle: "sonatel", nomCategorie: "Logement" },
   // Factures & abonnements
   { motCle: "netflix", nomCategorie: "Factures & abonnements" },
   { motCle: "spotify", nomCategorie: "Factures & abonnements" },
