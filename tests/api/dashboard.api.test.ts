@@ -109,4 +109,87 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
     const reponse = await request(app).get("/api/v1/dashboard/depenses-par-categorie");
     expect(reponse.status).toBe(401);
   });
+
+  it("exclut les dépenses en dehors du mois calendaire courant (par défaut)", async () => {
+    const { token } = await creerUtilisateur("depenses-hors-mois@test.local");
+    const compteId = await creerCompte(token, 0);
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+    const moisPrecedent = new Date();
+    moisPrecedent.setUTCMonth(moisPrecedent.getUTCMonth() - 1);
+    const dateMoisPrecedent = moisPrecedent.toISOString().slice(0, 10);
+
+    // Dépense datée du mois précédent : ne doit pas être comptée par défaut.
+    await request(app)
+      .post("/api/v1/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        compteId,
+        montant: 999,
+        type: "DEPENSE",
+        libelle: "Uber ancien",
+        dateOperation: dateMoisPrecedent,
+      });
+    // Dépense datée d'aujourd'hui : doit être comptée.
+    await request(app)
+      .post("/api/v1/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        compteId,
+        montant: 15,
+        type: "DEPENSE",
+        libelle: "Uber recent",
+        dateOperation: aujourdhui,
+      });
+
+    const reponse = await request(app)
+      .get("/api/v1/dashboard/depenses-par-categorie")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reponse.status).toBe(200);
+    const corps = reponse.body as {
+      depenses: Array<{ categorieId: string; nomCategorie: string; montantTotal: number }>;
+    };
+    const transport = corps.depenses.find((d) => d.nomCategorie === "Transport");
+    expect(transport).toBeTruthy();
+    expect(transport?.montantTotal).toBe(15);
+  });
+
+  it("les paramètres du/au remplacent la période par défaut du mois courant", async () => {
+    const { token } = await creerUtilisateur("depenses-du-au@test.local");
+    const compteId = await creerCompte(token, 0);
+    const moisPrecedent = new Date();
+    moisPrecedent.setUTCMonth(moisPrecedent.getUTCMonth() - 1);
+    const dateMoisPrecedent = moisPrecedent.toISOString().slice(0, 10);
+
+    await request(app)
+      .post("/api/v1/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        compteId,
+        montant: 42,
+        type: "DEPENSE",
+        libelle: "Uber du mois dernier",
+        dateOperation: dateMoisPrecedent,
+      });
+
+    const du = new Date(Date.UTC(moisPrecedent.getUTCFullYear(), moisPrecedent.getUTCMonth(), 1))
+      .toISOString()
+      .slice(0, 10);
+    const au = new Date(Date.UTC(moisPrecedent.getUTCFullYear(), moisPrecedent.getUTCMonth() + 1, 0))
+      .toISOString()
+      .slice(0, 10);
+
+    const reponse = await request(app)
+      .get("/api/v1/dashboard/depenses-par-categorie")
+      .query({ du, au })
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reponse.status).toBe(200);
+    const corps = reponse.body as {
+      depenses: Array<{ categorieId: string; nomCategorie: string; montantTotal: number }>;
+    };
+    const transport = corps.depenses.find((d) => d.nomCategorie === "Transport");
+    expect(transport).toBeTruthy();
+    expect(transport?.montantTotal).toBe(42);
+  });
 });
