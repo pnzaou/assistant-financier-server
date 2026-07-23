@@ -26,15 +26,14 @@ describe("repondreAuMessage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetConversations();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: "Réponse de test" } }],
-        }),
+    const reponseFictive = {
+      ok: true,
+      json: () => ({
+        choices: [{ message: { content: "Réponse de test" } }],
       }),
-    );
+    };
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reponseFictive));
   });
 
   it("isole les conversations par utilisateur et ne mélange jamais les données de deux comptes", async () => {
@@ -55,7 +54,15 @@ describe("repondreAuMessage", () => {
     expect(listerParPersonneMock).toHaveBeenNthCalledWith(1, "personne-a");
     expect(listerParPersonneMock).toHaveBeenNthCalledWith(2, "personne-b");
 
-    const payloads = vi.mocked(fetch).mock.calls.map(([, options]) => JSON.parse(options?.body as string));
+    const payloads = vi.mocked(fetch).mock.calls.map(([, options]) => {
+      const body = options?.body;
+      if (typeof body !== "string") {
+        return { messages: [] as Array<{ content?: string }> };
+      }
+
+      const parsed = JSON.parse(body) as { messages?: Array<{ content?: string }> };
+      return parsed;
+    });
     const premierPrompt = payloads[0].messages[1]?.content ?? "";
     const deuxiemePrompt = payloads[1].messages[1]?.content ?? "";
 
