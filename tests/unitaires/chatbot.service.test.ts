@@ -63,8 +63,10 @@ describe("repondreAuMessage", () => {
       const parsed = JSON.parse(body) as { messages?: Array<{ content?: string }> };
       return parsed;
     });
-    const premierPrompt = payloads[0].messages[1]?.content ?? "";
-    const deuxiemePrompt = payloads[1].messages[1]?.content ?? "";
+    const premierPayload = payloads[0] ?? { messages: [] as Array<{ content?: string }> };
+    const deuxiemePayload = payloads[1] ?? { messages: [] as Array<{ content?: string }> };
+    const premierPrompt = premierPayload.messages?.[1]?.content ?? "";
+    const deuxiemePrompt = deuxiemePayload.messages?.[1]?.content ?? "";
 
     expect(premierPrompt).toContain("personne-a");
     expect(deuxiemePrompt).toContain("personne-b");
