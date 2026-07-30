@@ -28,12 +28,57 @@ describe("repondreAuMessage", () => {
     resetConversations();
     const reponseFictive = {
       ok: true,
-      json: () => ({
+      text: async () => JSON.stringify({
         choices: [{ message: { content: "Réponse de test" } }],
       }),
     };
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reponseFictive));
+  });
+
+  it("utilise l'endpoint Groq quand la clé commence par gsk_", async () => {
+    process.env.GROK_API_KEY = "gsk_test-cle";
+    delete process.env.GROK_BASE_URL;
+
+    listerParPersonneMock.mockResolvedValueOnce([
+      { id: "compte-a", nom: "Compte courant", devise: "EUR" },
+    ]);
+    listerTransactionsMock.mockResolvedValueOnce({
+      items: [],
+      total: 0,
+    });
+    categorieFindManyMock.mockResolvedValueOnce([]);
+
+    await repondreAuMessage("personne-a", "Bonjour");
+
+    const [url] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("utilise le solde actuel fourni dans le contexte sans le recalculer à partir d'une seule transaction", async () => {
+    listerParPersonneMock.mockResolvedValueOnce([
+      { id: "compte-a", nom: "Compte courant", devise: "XOF" },
+    ]);
+    listerTransactionsMock.mockResolvedValueOnce({
+      items: [{ id: "txn-a", compteId: "compte-a", montant: 20000, type: "DEPENSE", libelle: "Hôtel", dateOperation: new Date("2026-07-20") }],
+      total: 1,
+    });
+    categorieFindManyMock.mockResolvedValueOnce([]);
+
+    await repondreAuMessage("personne-a", "Quel est mon solde actuel ?");
+
+    const payloads = vi.mocked(fetch).mock.calls.map(([, options]) => {
+      const body = options?.body;
+      if (typeof body !== "string") {
+        return { messages: [] as Array<{ content?: string }> };
+      }
+
+      return JSON.parse(body) as { messages?: Array<{ content?: string }> };
+    });
+    const prompt = payloads[0]?.messages?.[1]?.content ?? "";
+
+    expect(prompt).toContain("solde actuel fourni");
+    expect(prompt).toContain("ne recalcule pas un nouveau solde");
   });
 
   it("isole les conversations par utilisateur et ne mélange jamais les données de deux comptes", async () => {

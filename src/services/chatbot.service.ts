@@ -16,11 +16,36 @@ function lireCleApiGrok(): string | undefined {
 }
 
 function lireModeleGrok(): string {
-  return process.env.GROK_MODEL?.trim() || "grok-2-latest";
+  return process.env.GROK_MODEL?.trim() || "llama-3.1-8b-instant";
 }
 
 function lireUrlApiGrok(): string {
-  return process.env.GROK_BASE_URL?.trim() || "https://api.x.ai/v1/chat/completions";
+  const url = process.env.GROK_BASE_URL?.trim();
+  if (url && url.length > 0) return url;
+
+  return "https://api.groq.com/openai/v1/chat/completions";
+}
+
+function construirePayloadGrok(
+  messages: Array<{ role: string; content: string }>,
+): Record<string, unknown> {
+  const modele = lireModeleGrok();
+  const url = lireUrlApiGrok();
+  const estGroq = /groq/i.test(url) || /api\.groq\.com/i.test(url);
+
+  if (estGroq) {
+    return {
+      model: modele,
+      messages,
+      temperature: 0.2,
+    };
+  }
+
+  return {
+    model: modele,
+    messages,
+    temperature: 0.2,
+  };
 }
 
 function formaterMontant(valeur: number, devise: string): string {
@@ -64,11 +89,13 @@ async function construireContexteFinancier(personneId: string): Promise<string> 
     .map((ligne) => `- ${ligne.compte.nom}: ${formaterMontant(ligne.solde, ligne.compte.devise)}`)
     .join("\n");
 
+  const deviseParCompte = new Map(comptes.map((compte) => [compte.id, compte.devise]));
+
   const lignesTransactions = transactions.items
-    .map(
-      (transaction) =>
-        `- ${formaterDate(transaction.dateOperation)} | ${transaction.type} | ${transaction.libelle} | ${formaterMontant(Number(transaction.montant), "EUR")}`,
-    )
+    .map((transaction) => {
+      const devise = deviseParCompte.get(transaction.compteId) ?? "XOF";
+      return `- ${formaterDate(transaction.dateOperation)} | ${transaction.type} | ${transaction.libelle} | ${formaterMontant(Number(transaction.montant), devise)}`;
+    })
     .join("\n");
 
   const lignesCategories = categories.length
@@ -108,6 +135,8 @@ function construireMessages(
         "Tu ne dois répondre qu'aux questions liées aux transactions, comptes, soldes, habitudes de dépenses, budgets, objectifs ou catégories de cet utilisateur.",
         "Si l'utilisateur pose une question hors sujet, indique poliment que tu peux aider uniquement sur les données financières de cette application.",
         "Ne mentionne jamais un autre utilisateur ni des données d'un autre compte.",
+        "Utilise strictement le solde actuel fourni dans le contexte financier de l'utilisateur : ne recalcule pas un nouveau solde à partir d'une seule transaction si le contexte donne déjà un solde actuel.",
+        "Quand on te demande le solde actuel, réponds à partir du solde fourni dans les comptes et non à partir d'une déduction arbitraire de la dernière transaction.",
       ].join(" "),
     },
     {
@@ -128,26 +157,27 @@ async function appelerGrok(messages: Array<{ role: string; content: string }>): 
     return "Le service Grok n'est pas encore configuré. Ajoutez GROK_API_KEY dans votre fichier .env pour activer le chatbot.";
   }
 
+  const url = lireUrlApiGrok();
+  const modele = lireModeleGrok();
+
   try {
-    const reponse = await fetch(lireUrlApiGrok(), {
+    const reponse = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${cleApi}`,
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      body: JSON.stringify({
-        model: lireModeleGrok(),
-        messages,
-        temperature: 0.2,
-      }),
+      body: JSON.stringify(construirePayloadGrok(messages)),
     });
 
+    const details = await reponse.text();
     if (!reponse.ok) {
-      const details = await reponse.text();
+      console.error("Erreur Grok chatbot", { status: reponse.status, url, modele, details });
       throw new Error(`Grok a répondu avec un statut ${reponse.status}: ${details}`);
     }
 
-    const payload = (await reponse.json()) as {
+    const payload = JSON.parse(details) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
 
@@ -156,8 +186,24 @@ async function appelerGrok(messages: Array<{ role: string; content: string }>): 
       "Je n'ai pas pu produire une réponse exploitable."
     );
   } catch (erreur) {
-    console.error("Erreur Grok chatbot", erreur);
-    return "Le service Grok n'a pas pu répondre. Vérifiez la configuration de GROK_API_KEY et l'accès réseau.";
+    console.error("Erreur Grok chatbot", {
+      erreur,
+      url: lireUrlApiGrok(),
+      modele: lireModeleGrok(),
+    });
+
+    const resume = messages
+      .filter((m) => m.role !== "system")
+      .slice(-3)
+      .map((m) => `${m.role}: ${m.content}`)
+      .join(" | ");
+
+    return [
+      "Je n'ai pas pu contacter le service d'IA pour le moment.",
+      "Voici une réponse de secours basée sur la conversation :",
+      `- ${resume || "Aucun contexte disponible."}`,
+      "Vous pouvez aussi reformuler votre question ou réessayer plus tard.",
+    ].join("\n");
   }
 }
 

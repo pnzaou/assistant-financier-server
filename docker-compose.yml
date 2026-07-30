@@ -45,6 +45,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
       CLIENT_URLS: ${CLIENT_URLS:-http://localhost:5173}
       COOKIE_SECRET: ${COOKIE_SECRET:-dev-cookie-secret-a-changer}
+      GROK_API_KEY: ${GROK_API_KEY:-}
+      GROK_MODEL: ${GROK_MODEL:-llama-3.1-8b-instant}
+      GROK_BASE_URL: ${GROK_BASE_URL:-https://api.groq.com/openai/v1/chat/completions}
       # Clés JWT RS256 en PEM aplati — voir .env.example pour les générer.
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
