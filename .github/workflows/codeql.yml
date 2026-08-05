@@ -1,0 +1,46 @@
+# SAST — analyse statique du code à la recherche de failles (injections,
+# secrets en dur, désérialisation dangereuse, chemins de fichiers non validés…).
+#
+# CodeQL est natif GitHub et gratuit : les résultats atterrissent dans l'onglet
+# Security → Code scanning, et s'affichent en commentaire sur les PR concernées.
+name: CodeQL
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  # L'analyse hebdomadaire rattrape les nouvelles règles CodeQL sur du code qui
+  # n'a pas bougé : une faille peut être découverte après le merge.
+  schedule:
+    - cron: "0 3 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyse:
+    name: Analyse CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialisation de CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # `security-and-quality` ajoute les règles de maintenabilité aux
+          # règles de sécurité par défaut.
+          queries: security-and-quality
+
+      # Pas de build : CodeQL analyse directement les sources TypeScript.
+      - name: Analyse
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

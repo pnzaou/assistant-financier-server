@@ -1,0 +1,17 @@
+# Règles passives ZAP — API JSON.
+# Format : ID<TAB>ACTION<TAB>commentaire     (ACTION = IGNORE | WARN | FAIL)
+#
+# On ignore ici les règles écrites pour des pages HTML servies au navigateur.
+# L'API ne rend jamais de HTML : ces alertes seraient du bruit permanent et
+# finiraient par masquer les vraies. Le front, lui, est scanné séparément.
+10015	IGNORE	Cache-Control absent — réponses JSON authentifiées, non mises en cache
+10020	IGNORE	Anti-clickjacking — sans rendu HTML, rien à encadrer (helmet le pose déjà)
+10038	IGNORE	Content-Security-Policy — concerne le front, pas une API JSON
+10063	IGNORE	Permissions-Policy — idem, règle orientée navigateur
+10109	IGNORE	Modern Web Application — détection informative, pas une vulnérabilité
+90005	IGNORE	En-têtes Sec-Fetch — émis par le navigateur, absents des appels du spider
+
+# Volontairement laissées actives : ce sont de vraies fuites d'information.
+10036	WARN	Version du serveur exposée
+10096	WARN	Horodatage divulgué dans une réponse
+10021	WARN	X-Content-Type-Options manquant
