@@ -1,0 +1,18 @@
+# Fins de ligne normalisées en LF, dans le dépôt ET dans la copie de travail.
+#
+# Sans ça, `core.autocrlf=true` (le défaut de Git for Windows) sort des CRLF :
+# `npm run format:check` échoue alors sur TOUS les fichiers en local, alors que
+# la CI — qui checkout sous Linux — passe au vert. Symptôme classique et très
+# déroutant quand l'équipe est à cheval sur Windows et Linux.
+#
+# Après avoir ajouté ce fichier, une seule fois :
+#   git add --renormalize .
+* text=auto eol=lf
+
+# Les scripts exécutés dans les conteneurs Linux : un CRLF sur le shebang fait
+# échouer le démarrage avec un « no such file or directory » illisible.
+*.sh text eol=lf
+Dockerfile text eol=lf
+
+# Fichier de règles ZAP : séparé par de VRAIES tabulations, à ne pas convertir.
+*.tsv text eol=lf

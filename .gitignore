@@ -1,9 +1,16 @@
 node_modules
 # Keep environment variables out of version control
 .env
+# .env.ci est généré par la CI et contient une clé privée JWT : jamais commité.
+.env.*
+!.env.example
 
 /generated/prisma
 /dist
+
+# Rapports de tests (couverture lcov consommée par SonarCloud)
+/coverage
+/rapports
 
 # Clés JWT (RS256) — dans le .env, jamais commitées.
 # *.key : fichiers intermédiaires produits par la méthode openssl.

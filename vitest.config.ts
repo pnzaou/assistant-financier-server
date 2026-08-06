@@ -13,5 +13,18 @@ export default defineConfig({
     // Marge pour les tests d'API (bcrypt à 12 tours ≈ 250 ms par hash).
     testTimeout: 15000,
     hookTimeout: 60000,
+    coverage: {
+      provider: "v8",
+      // `lcov` est le format lu par SonarCloud ; `text` sert en local.
+      reporter: ["text", "lcov", "html"],
+      reportsDirectory: "coverage",
+      include: ["src/**/*.ts"],
+      exclude: [
+        "src/index.ts", // démarrage du serveur : rien de testable unitairement
+        "src/**/*.d.ts",
+        "src/config/**", // lecture d'environnement
+        "src/dtos/**", // types purs, effacés à la compilation
+      ],
+    },
   },
 });

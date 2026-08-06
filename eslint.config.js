@@ -3,7 +3,16 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   // Code généré, sorties de build et configs racines : pas lintés
-  { ignores: ["dist/", "generated/", "node_modules/", "eslint.config.js", "prisma.config.ts"] },
+  {
+    ignores: [
+      "dist/",
+      "generated/",
+      "node_modules/",
+      "coverage/",
+      "eslint.config.js",
+      "prisma.config.ts",
+    ],
+  },
   {
     files: ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
     extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked],
