@@ -187,6 +187,15 @@ export async function reinitialiserMotDePasse(
   await sessionRepository.revoquerToutesPourPersonne(enregistre.personneId);
 }
 
+// `token` à `null` désinscrit l'appareil (envoyé à la déconnexion, pour
+// qu'un appareil partagé ne reçoive plus de notifications après logout).
+export async function mettreAJourPushToken(
+  personneId: string,
+  token: string | null,
+): Promise<void> {
+  await personneRepository.mettreAJourPushToken(personneId, token);
+}
+
 export async function profilConnecte(personneId: string): Promise<UtilisateurPublicDto> {
   const personne = await personneRepository.trouverParId(personneId);
   if (!personne) {

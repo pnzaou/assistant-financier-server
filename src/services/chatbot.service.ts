@@ -207,6 +207,64 @@ async function appelerGrok(messages: Array<{ role: string; content: string }>): 
   }
 }
 
+// Contrairement à `repondreAuMessage`, ne renvoie JAMAIS de texte de secours
+// façon chat ("Je n'ai pas pu contacter le service...") — un `null` laisse
+// l'appelant (détection proactive) retomber sur son propre message-modèle
+// court, adapté à une notification push plutôt qu'à une réponse de chat.
+export async function genererConseilProactif(
+  personneId: string,
+  descriptionEvenement: string,
+): Promise<string | null> {
+  const cleApi = lireCleApiGrok();
+  if (!cleApi) {
+    return null;
+  }
+
+  const contexte = await construireContexteFinancier(personneId);
+  const messages = [
+    {
+      role: "system",
+      content: [
+        "Tu es un assistant financier proactif qui rédige de courtes notifications push personnalisées.",
+        "Réponds en UNE seule phrase courte (120 caractères maximum), ton chaleureux et direct, sans emoji ni markdown.",
+        "Donne un conseil concret et actionnable lié à l'événement décrit, en t'appuyant sur le contexte financier fourni.",
+        "Ne mentionne jamais un autre utilisateur ni des données d'un autre compte.",
+      ].join(" "),
+    },
+    {
+      role: "user",
+      content: [
+        `Contexte financier :\n${contexte}`,
+        `Événement à commenter : ${descriptionEvenement}`,
+      ].join("\n"),
+    },
+  ];
+
+  const url = lireUrlApiGrok();
+  try {
+    const reponse = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cleApi}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(construirePayloadGrok(messages)),
+    });
+    if (!reponse.ok) {
+      console.log("[chatbot] genererConseilProactif : réponse non ok", reponse.status);
+      return null;
+    }
+    const payload = (await reponse.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    return payload.choices?.[0]?.message?.content?.trim() || null;
+  } catch (erreur) {
+    console.log("[chatbot] genererConseilProactif a échoué", erreur);
+    return null;
+  }
+}
+
 export async function repondreAuMessage(personneId: string, message: string): Promise<string> {
   const contexte = await construireContexteFinancier(personneId);
   const messages = construireMessages(personneId, message, contexte);

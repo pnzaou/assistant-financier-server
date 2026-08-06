@@ -26,3 +26,10 @@ export function marquerEmailVerifie(id: string) {
 export function mettreAJourMotDePasse(id: string, passwordHash: string) {
   return prisma.personne.update({ where: { id }, data: { passwordHash } });
 }
+
+export function mettreAJourPushToken(id: string, expoPushToken: string | null) {
+  return prisma.personne.update({
+    where: { id },
+    data: { expoPushToken, expoPushTokenMisAJourLe: new Date() },
+  });
+}

@@ -12,6 +12,7 @@ import * as compteRepository from "../repositories/compte.repository.js";
 import * as transactionRepository from "../repositories/transaction.repository.js";
 import { deviner } from "./categorisation.service.js";
 import { trouverCompteDeLaPersonne } from "./compte.service.js";
+import { verifierGrosseDepense } from "./detection-proactive.service.js";
 
 function versDto(transaction: Transaction): TransactionDto {
   return {
@@ -76,6 +77,20 @@ export async function creerTransaction(
     ...(dto.note !== undefined ? { note: dto.note } : {}),
     dateOperation: new Date(dto.dateOperation),
   });
+
+  // Ne bloque jamais la réponse de création : le conseil proactif appelle
+  // maintenant le chatbot (LLM), une latence qui n'a rien à faire dans le
+  // chemin critique d'un simple enregistrement de transaction.
+  if (dto.type === "DEPENSE") {
+    void verifierGrosseDepense(personneId, {
+      id: transaction.id,
+      montant: dto.montant,
+      libelle: dto.libelle,
+    }).catch((error) => {
+      console.log("[transaction] verifierGrosseDepense a échoué", error);
+    });
+  }
+
   return versDto(transaction);
 }
 

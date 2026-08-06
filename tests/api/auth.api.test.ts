@@ -264,3 +264,56 @@ describe("divers", () => {
     expect(reponse.body.message).toBeTruthy();
   });
 });
+
+describe("PUT /api/v1/auth/push-token", () => {
+  it("refuse sans token (401)", async () => {
+    const reponse = await request(app).put("/api/v1/auth/push-token").send({ token: "ExponentPushToken[xxx]" });
+    expect(reponse.status).toBe(401);
+  });
+
+  it("enregistre le token Expo Push de l'utilisateur connecté", async () => {
+    const inscription = await inscrire();
+    const accessToken = inscription.body.accessToken as string;
+
+    const reponse = await request(app)
+      .put("/api/v1/auth/push-token")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ token: "ExponentPushToken[xxx]" });
+
+    expect(reponse.status).toBe(204);
+    const personne = await prisma.personne.findUnique({ where: { email: COMPTE.email } });
+    expect(personne?.expoPushToken).toBe("ExponentPushToken[xxx]");
+    expect(personne?.expoPushTokenMisAJourLe).toBeInstanceOf(Date);
+  });
+
+  it("accepte token: null pour désinscrire l'appareil", async () => {
+    const inscription = await inscrire();
+    const accessToken = inscription.body.accessToken as string;
+
+    await request(app)
+      .put("/api/v1/auth/push-token")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ token: "ExponentPushToken[xxx]" });
+
+    const reponse = await request(app)
+      .put("/api/v1/auth/push-token")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ token: null });
+
+    expect(reponse.status).toBe(204);
+    const personne = await prisma.personne.findUnique({ where: { email: COMPTE.email } });
+    expect(personne?.expoPushToken).toBeNull();
+  });
+
+  it("refuse un token qui n'est ni une chaîne ni null (422)", async () => {
+    const inscription = await inscrire();
+    const accessToken = inscription.body.accessToken as string;
+
+    const reponse = await request(app)
+      .put("/api/v1/auth/push-token")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ token: 12345 });
+
+    expect(reponse.status).toBe(422);
+  });
+});
