@@ -98,6 +98,39 @@ Pense à définir un vrai mot de passe Postgres et un vrai `COOKIE_SECRET` dans 
 Les clés JWT (`JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`) doivent être **les mêmes à
 chaque déploiement** — les régénérer invaliderait tous les tokens émis.
 
+## Observabilité
+
+| Endpoint       | Rôle                                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `GET /health`  | Sonde de vivacité et de disponibilité. Répond **503** pendant l'arrêt en douceur, ou si la base est injoignable. |
+| `GET /metrics` | Métriques au format Prometheus. Non exposé publiquement : l'Ingress ne route que `/api` et `/health` vers l'API. |
+
+**Journaux.** Une ligne JSON par requête sur stdout (`pino`), filtrable par
+`requestId`, `statut` ou `responseTime`. Chaque réponse porte un en-tête
+`X-Request-Id` : un utilisateur qui signale un bug peut le citer, et la requête
+exacte se retrouve dans les journaux. Les en-têtes `Authorization` et `Cookie`,
+ainsi que tout champ ressemblant à un mot de passe ou un jeton, sont masqués.
+
+En développement, la sortie est colorée via `pino-pretty` ; en production, du
+JSON brut. `pino-pretty` est une dépendance de dev — le transport ne doit
+**jamais** être activé quand `NODE_ENV=production`, l'image étant construite
+avec `npm ci --omit=dev`.
+
+Les sondes (`/health`, `/metrics`) ne sont pas journalisées : à 10 s
+d'intervalle par pod, elles noieraient le trafic réel.
+
+**Arrêt en douceur.** Sur `SIGTERM`, le serveur bascule d'abord `/health` en
+503, attend `DELAI_DRAINAGE_MS` (5 s par défaut) que Kubernetes cesse de
+router, puis ferme le serveur et le pool PostgreSQL. Sans cette séquence,
+chaque redéploiement couperait des requêtes en vol — Kubernetes envoie le
+signal et retire le pod des Endpoints en parallèle, pas l'un après l'autre.
+
+| Variable             | Défaut                        | Rôle                               |
+| -------------------- | ----------------------------- | ---------------------------------- |
+| `LOG_LEVEL`          | `info` en prod, `debug` sinon | Verbosité                          |
+| `DELAI_DRAINAGE_MS`  | `5000`                        | Attente avant fermeture du serveur |
+| `DELAI_ARRET_MAX_MS` | `25000`                       | Au-delà, sortie forcée             |
+
 ## CI (GitHub Actions)
 
 À chaque push et sur chaque pull request, GitHub exécute automatiquement
