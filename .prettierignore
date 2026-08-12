@@ -6,3 +6,5 @@ prisma/migrations
 *.jpeg
 *.jpg
 *.png
+coverage
+rapports

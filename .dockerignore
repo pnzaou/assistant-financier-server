@@ -8,6 +8,18 @@ Dockerfile
 docker-compose*.yml
 .dockerignore
 README.md
+CONTRIBUTING.md
 *.jpeg
 *.jpg
 *.png
+
+# Sorties de tests : les laisser entrer invaliderait le cache Docker à chaque
+# exécution de la suite.
+coverage
+rapports
+
+# Outillage CI : sans rapport avec ce qui tourne dans le conteneur.
+.github
+.zap
+sonar-project.properties
+.gitattributes

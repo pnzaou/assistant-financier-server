@@ -1,0 +1,50 @@
+# Mises à jour de dépendances automatisées (volet SCA du point 4e).
+# Dependabot ouvre les PR ; la CI les valide ; l'équipe les merge.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Dakar
+    target-branch: develop
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    labels: ["dependances"]
+    groups:
+      # Un seul PR pour tout l'outillage de dev : ces montées de version sont
+      # sans risque fonctionnel et n'ont pas besoin d'être relues une par une.
+      outillage-dev:
+        dependency-type: development
+        update-types: [minor, patch]
+      # Les correctifs de production groupés aussi, mais séparément : ils
+      # méritent une relecture, pas cinq.
+      production-mineur:
+        dependency-type: production
+        update-types: [minor, patch]
+    ignore:
+      # Prisma pilote le schéma ET les migrations : une majeure se traite à la
+      # main, jamais par une PR automatique.
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
+
+  # Les actions GitHub sont du code exécuté avec le GITHUB_TOKEN : les garder
+  # à jour fait partie de la surface de sécurité du pipeline.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Dakar
+    target-branch: develop
+    commit-message:
+      prefix: "ci(deps)"
+    labels: ["dependances", "ci"]
