@@ -32,6 +32,18 @@ RUN DATABASE_URL="postgresql://build:build@build:5432/build?schema=public" npx p
 # ─── Image de production ─────────────────────────────────────────
 FROM base AS prod
 ENV NODE_ENV=production
+
+# npm à jour AVANT l'installation des dépendances.
+#
+# La CVE-2026-59873 (déni de service par bombe gzip dans node-tar) n'est pas
+# dans les dépendances du projet : elle est dans le `tar` que npm EMBARQUE, et
+# que l'image node:24-slim livre tel quel. Aucun override de package.json ne
+# peut l'atteindre — seule la mise à jour de npm lui-même la corrige.
+#
+# Trivy bloque la publication de l'image sur ce type de faille : critique et
+# corrigeable. C'est exactement ce qu'on lui demande.
+RUN npm install -g npm@latest && npm cache clean --force
+
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
