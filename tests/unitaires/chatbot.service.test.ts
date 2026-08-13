@@ -1,8 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const listerParPersonneMock = vi.fn();
-const listerTransactionsMock = vi.fn();
-const categorieFindManyMock = vi.fn();
+// `vi.hoisted` est indispensable ici, et pas seulement stylistique.
+//
+// Vitest remonte les appels à `vi.mock` tout en haut du fichier, et les
+// déclarations `import` d'ESM le sont aussi. Le module testé était donc chargé
+// — donc les factories de mock exécutées — AVANT que de simples `const` en
+// haut de fichier ne soient initialisées : les mocks se trouvaient encore dans
+// leur zone morte temporelle, et la suite échouait au chargement sur
+// « Cannot access 'categorieFindManyMock' before initialization ».
+//
+// `vi.hoisted` fait évaluer ce bloc avant tout le reste, mocks compris.
+const { listerParPersonneMock, listerTransactionsMock, categorieFindManyMock } = vi.hoisted(() => ({
+  listerParPersonneMock: vi.fn(),
+  listerTransactionsMock: vi.fn(),
+  categorieFindManyMock: vi.fn(),
+}));
 
 vi.mock("../../src/repositories/compte.repository.js", () => ({
   listerParPersonne: listerParPersonneMock,
