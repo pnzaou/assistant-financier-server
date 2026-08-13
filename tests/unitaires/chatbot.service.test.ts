@@ -149,10 +149,14 @@ describe("repondreAuMessage", () => {
 
       return JSON.parse(body) as { messages?: Array<{ content?: string }> };
     });
-    const prompt = payloads[0]?.messages?.[1]?.content ?? "";
+    // `messages[0]` et non `[1]` : la consigne vit dans le message SYSTÈME,
+    // celui qui cadre le comportement du modèle. `messages[1]` porte le
+    // contexte financier et la question de l'utilisateur — l'instruction n'y a
+    // jamais figuré, d'où l'échec de ce test à sa première exécution en CI.
+    const consigneSysteme = payloads[0]?.messages?.[0]?.content ?? "";
 
-    expect(prompt).toContain("solde actuel fourni");
-    expect(prompt).toContain("ne recalcule pas un nouveau solde");
+    expect(consigneSysteme).toContain("solde actuel fourni");
+    expect(consigneSysteme).toContain("ne recalcule pas un nouveau solde");
   });
 
   it("isole les conversations par utilisateur et ne mélange jamais les données de deux comptes", async () => {
