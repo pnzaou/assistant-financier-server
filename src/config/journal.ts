@@ -3,18 +3,30 @@ import pino from "pino";
 const enProduction = process.env.NODE_ENV === "production";
 
 /**
+ * Sortie colorée via pino-pretty : opt-in EXPLICITE, jamais déduite.
+ *
+ * Le critère était auparavant `NODE_ENV !== "production"`, et c'était faux.
+ * L'image de production est construite avec `npm ci --omit=dev`, donc sans
+ * pino-pretty — mais rien n'oblige cette image à tourner avec
+ * NODE_ENV=production. La stack e2e la démarre justement en `development`
+ * pour que les cookies de session fonctionnent en HTTP, et le serveur
+ * plantait alors au démarrage :
+ *
+ *     Error: unable to determine transport target for "pino-pretty"
+ *
+ * La disponibilité du module dépend de la façon dont l'image a été
+ * construite, pas de la valeur de NODE_ENV. Un drapeau dédié dit exactement
+ * ce qu'il veut dire, et vaut `false` partout où on ne l'a pas demandé.
+ */
+const sortieLisible = process.env.LOG_PRETTY === "true";
+
+/**
  * Logger applicatif.
  *
- * En production : une ligne JSON par événement sur stdout. C'est ce que
+ * Par défaut : une ligne JSON par événement sur stdout. C'est ce que
  * Kubernetes ramasse et ce que Log Analytics sait indexer — une ligne de texte
  * libre à la `morgan` n'est pas requêtable, alors qu'un objet JSON se filtre
  * par `statusCode`, `requestId` ou `dureeMs`.
- *
- * En développement : sortie colorée et lisible via pino-pretty, qui est une
- * dépendance de dev. L'image de production est construite avec
- * `npm ci --omit=dev` : le transport ne doit donc JAMAIS être activé quand
- * NODE_ENV vaut "production", sinon le serveur planterait au démarrage sur un
- * module introuvable.
  */
 export const journal = pino({
   level: process.env.LOG_LEVEL ?? (enProduction ? "info" : "debug"),
@@ -53,9 +65,8 @@ export const journal = pino({
   // Diffusion conditionnelle plutôt que `transport: undefined` : le tsconfig
   // active `exactOptionalPropertyTypes`, qui distingue « clé absente » de
   // « clé présente valant undefined » et refuse la seconde.
-  ...(enProduction
-    ? {}
-    : {
+  ...(sortieLisible
+    ? {
         transport: {
           target: "pino-pretty",
           options: {
@@ -64,5 +75,6 @@ export const journal = pino({
             ignore: "pid,hostname,service",
           },
         },
-      }),
+      }
+    : {}),
 });
