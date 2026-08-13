@@ -155,9 +155,20 @@ jobs:
     name: SonarCloud
     runs-on: ubuntu-latest
     needs: qualite
-    # Le token n'existe pas sur les PR venant d'un fork : on saute plutôt que
-    # d'échouer sur une erreur d'authentification incompréhensible.
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    # Deux raisons de sauter ce job.
+    #
+    # 1. Les PR venant d'un fork n'ont pas accès au token : on saute plutôt que
+    #    d'échouer sur une erreur d'authentification incompréhensible.
+    # 2. Le plan gratuit de SonarCloud n'autorise que la branche PRINCIPALE du
+    #    projet et les pull requests. Sur toute autre branche, l'analyse est
+    #    bien téléversée mais la LECTURE du Quality Gate est refusée
+    #    (« Not authorized or project not found »), ce qui fait échouer le job
+    #    sans qu'aucun problème de qualité n'existe.
+    #    `develop` doit donc être déclarée branche principale côté SonarCloud —
+    #    c'est bien elle qui reçoit l'intégration continue.
+    if: >-
+      ${{ !github.event.pull_request.head.repo.fork
+      && (github.event_name == 'pull_request' || github.ref == 'refs/heads/develop') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -170,7 +181,7 @@ jobs:
           path: coverage
 
       - name: Analyse SonarCloud
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
