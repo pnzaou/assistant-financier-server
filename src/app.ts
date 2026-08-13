@@ -27,6 +27,11 @@ const allowedOrigins = (process.env.CLIENT_URLS ?? "http://localhost:5173")
   .map((url) => url.trim())
   .filter(Boolean);
 
+const allowedOriginPatterns = [
+  /^https?:\/\/192\.168\.\d+\.\d+:(5000|5173)$/,
+  /^exp:\/\/192\.168\.\d+\.\d+:\d+$/,
+];
+
 app.use(
   helmet({
     contentSecurityPolicy: false,
@@ -36,7 +41,16 @@ app.use(
 app.use(
   cors({
     origin(origin, callback) {
-      callback(null, !origin || allowedOrigins.includes(origin));
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      if (allowedOriginPatterns.some((pattern) => pattern.test(origin))) {
+        return callback(null, true);
+      }
+      return callback(new Error(`Origin ${origin} non autorisée`));
     },
     credentials: true,
   }),

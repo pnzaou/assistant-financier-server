@@ -209,7 +209,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Scan de l'image (Trivy) — rapport complet
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_LOCALE }}
           format: sarif
@@ -226,7 +226,7 @@ jobs:
       # Bloquant, mais seulement sur ce qui est corrigeable : une CVE critique
       # sans correctif amont ne doit pas figer les livraisons.
       - name: Échec sur CVE critique corrigeable
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_LOCALE }}
           format: table

@@ -25,16 +25,21 @@ enum StatutCompte {
 
 // Le COMPTE d'un utilisateur (identité + authentification).
 model Personne {
-  id             String       @id @default(uuid(7)) @db.Uuid
-  email          String       @unique
-  passwordHash   String
-  nom            String
-  prenom         String
-  telephone      String?
-  statut         StatutCompte @default(ACTIF)
-  emailVerifieLe DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                       String       @id @default(uuid(7)) @db.Uuid
+  email                    String       @unique
+  passwordHash             String
+  nom                      String
+  prenom                   String
+  telephone                String?
+  statut                   StatutCompte @default(ACTIF)
+  emailVerifieLe           DateTime?
+  // Token Expo Push de l'appareil courant. Un seul token par personne : cette
+  // app suppose un usage mono-appareil, le dernier login écrase le précédent
+  // (pas de table séparée tant qu'il n'y a pas de besoin multi-appareil réel).
+  expoPushToken            String?
+  expoPushTokenMisAJourLe  DateTime?
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
 
   jetonsAuthentification JetonAuthentification[]
   sessionsRefresh        SessionRefresh[]

@@ -1,7 +1,9 @@
+import * as cron from "node-cron";
 import app from "./app.js";
 import { prisma } from "./config/prisma.js";
 import { journal } from "./config/journal.js";
 import { marquerIndisponible } from "./config/etat-service.js";
+import { detecterAnomaliesCategoriesToutesPersonnes } from "./services/detection-proactive.service.js";
 
 const port = Number(process.env.PORT ?? 5000);
 
@@ -22,8 +24,23 @@ const DELAI_DRAINAGE_MS = Number(process.env.DELAI_DRAINAGE_MS ?? 5000);
  */
 const DELAI_ARRET_MAX_MS = Number(process.env.DELAI_ARRET_MAX_MS ?? 25000);
 
-const serveur = app.listen(port, () => {
+const serveur = app.listen(port, "0.0.0.0", () => {
   journal.info({ port, env: process.env.NODE_ENV ?? "development" }, "API démarrée");
+});
+
+/**
+ * Une fois par jour à 8h (heure du serveur) : détecte les catégories dont la
+ * dépense du mois s'écarte nettement de l'habitude, pour chaque personne ayant
+ * un appareil enregistré.
+ *
+ * ATTENTION avec plusieurs replicas : chaque pod exécute ce planificateur, donc
+ * la détection tournerait autant de fois qu'il y a de pods. À déplacer dans un
+ * CronJob Kubernetes — une seule exécution, quel que soit le nombre de replicas.
+ */
+const tacheDetection = cron.schedule("0 8 * * *", () => {
+  void detecterAnomaliesCategoriesToutesPersonnes().catch((error) => {
+    journal.error({ err: error }, "[cron] detecterAnomaliesCategoriesToutesPersonnes a échoué");
+  });
 });
 
 let arretEnCours = false;
@@ -38,6 +55,10 @@ async function arreterProprement(signal: string): Promise<void> {
 
   // 1. Les sondes readiness commencent à échouer : plus de nouveau trafic.
   marquerIndisponible();
+
+  // Le planificateur maintient un timer actif : sans cet arrêt, le process ne
+  // se terminerait jamais de lui-même.
+  await tacheDetection.stop();
 
   const minuterieForce = setTimeout(() => {
     journal.error(
