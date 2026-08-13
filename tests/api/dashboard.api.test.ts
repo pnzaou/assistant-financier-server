@@ -21,6 +21,28 @@ async function creerCompte(token: string, soldeInitial = 0): Promise<string> {
   return reponse.body.compte.id as string;
 }
 
+async function trouverCategorieDepense(token: string): Promise<string> {
+  const reponse = await request(app)
+    .get("/api/v1/categories")
+    .query({ type: "DEPENSE" })
+    .set("Authorization", `Bearer ${token}`);
+  return reponse.body.categories[0].id as string;
+}
+
+// Le jour 15 du mois précédent, calé sur le jour 1 pour éviter tout
+// débordement de date (ex : le 31 mars - 1 mois ne doit pas retomber en mars).
+function dateMoisPrecedent(): string {
+  const maintenant = new Date();
+  const premierJourMoisPrecedent = new Date(
+    Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth() - 1, 1),
+  );
+  return new Date(
+    Date.UTC(premierJourMoisPrecedent.getUTCFullYear(), premierJourMoisPrecedent.getUTCMonth(), 15),
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
 beforeEach(async () => {
   await prisma.personne.deleteMany({});
 });
@@ -211,5 +233,147 @@ describe("GET /api/v1/dashboard/depenses-par-categorie", () => {
     const transport = corps.depenses.find((d) => d.nomCategorie === "Transport");
     expect(transport).toBeTruthy();
     expect(transport?.montantTotal).toBe(42);
+  });
+});
+
+describe("GET /api/v1/dashboard/vue-ensemble", () => {
+  it("refuse sans token (401)", async () => {
+    const reponse = await request(app).get("/api/v1/dashboard/vue-ensemble");
+    expect(reponse.status).toBe(401);
+  });
+
+  it("calcule revenus, dépenses et épargne du mois courant", async () => {
+    const { token } = await creerUtilisateur("vue-ensemble@test.local");
+    const compteId = await creerCompte(token, 0);
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 500,
+      type: "REVENU",
+      libelle: "Salaire",
+      dateOperation: aujourdhui,
+    });
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 200,
+      type: "DEPENSE",
+      libelle: "Courses",
+      dateOperation: aujourdhui,
+    });
+
+    const reponse = await request(app)
+      .get("/api/v1/dashboard/vue-ensemble")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reponse.status).toBe(200);
+    expect(reponse.body.vueEnsemble).toMatchObject({
+      revenus: 500,
+      depenses: 200,
+      epargne: 300,
+      budgetPourcentage: null,
+    });
+  });
+
+  it("exclut les transactions du mois précédent du calcul revenus/dépenses", async () => {
+    const { token } = await creerUtilisateur("vue-ensemble-mois-precedent@test.local");
+    const compteId = await creerCompte(token, 0);
+
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 999,
+      type: "DEPENSE",
+      libelle: "Ancienne dépense",
+      dateOperation: dateMoisPrecedent(),
+    });
+
+    const reponse = await request(app)
+      .get("/api/v1/dashboard/vue-ensemble")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reponse.status).toBe(200);
+    expect(reponse.body.vueEnsemble.depenses).toBe(0);
+  });
+
+  it("renvoie budgetPourcentage=null sans budget actif, et calculé sinon", async () => {
+    const { token } = await creerUtilisateur("vue-ensemble-budget@test.local");
+    const compteId = await creerCompte(token, 0);
+    const categorieId = await trouverCategorieDepense(token);
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 250,
+      type: "DEPENSE",
+      libelle: "Dépense catégorisée",
+      dateOperation: aujourdhui,
+      categorieId,
+    });
+
+    const sansBudget = await request(app)
+      .get("/api/v1/dashboard/vue-ensemble")
+      .set("Authorization", `Bearer ${token}`);
+    expect(sansBudget.body.vueEnsemble.budgetPourcentage).toBeNull();
+
+    await request(app)
+      .post("/api/v1/budgets")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ categorieId, montantPlafond: 1000 });
+
+    const avecBudget = await request(app)
+      .get("/api/v1/dashboard/vue-ensemble")
+      .set("Authorization", `Bearer ${token}`);
+    expect(avecBudget.body.vueEnsemble.budgetPourcentage).toBe(25);
+  });
+
+  it("calcule la variation du solde total vs la fin du mois précédent", async () => {
+    const { token } = await creerUtilisateur("vue-ensemble-variation@test.local");
+    const compteId = await creerCompte(token, 1000);
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+
+    // Solde au début du mois courant : 1000 - 200 = 800.
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 200,
+      type: "DEPENSE",
+      libelle: "Dépense du mois dernier",
+      dateOperation: dateMoisPrecedent(),
+    });
+    // Solde actuel : 800 + 100 = 900.
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 100,
+      type: "REVENU",
+      libelle: "Revenu du mois",
+      dateOperation: aujourdhui,
+    });
+
+    const reponse = await request(app)
+      .get("/api/v1/dashboard/vue-ensemble")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reponse.status).toBe(200);
+    expect(reponse.body.vueEnsemble.variationSoldePourcentage).toBeCloseTo(12.5, 5);
+  });
+
+  it("renvoie variationSoldePourcentage=null quand le solde de référence est nul", async () => {
+    const { token } = await creerUtilisateur("vue-ensemble-variation-nulle@test.local");
+    const compteId = await creerCompte(token, 0);
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+
+    await request(app).post("/api/v1/transactions").set("Authorization", `Bearer ${token}`).send({
+      compteId,
+      montant: 500,
+      type: "REVENU",
+      libelle: "Salaire",
+      dateOperation: aujourdhui,
+    });
+
+    const reponse = await request(app)
+      .get("/api/v1/dashboard/vue-ensemble")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reponse.status).toBe(200);
+    expect(reponse.body.vueEnsemble.variationSoldePourcentage).toBeNull();
   });
 });

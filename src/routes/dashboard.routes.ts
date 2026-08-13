@@ -12,5 +12,6 @@ dashboardRouter.get(
   validerPeriode,
   dashboardController.depensesParCategorie,
 );
+dashboardRouter.get("/vue-ensemble", dashboardController.vueEnsemble);
 
 export default dashboardRouter;

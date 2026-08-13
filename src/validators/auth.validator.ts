@@ -41,3 +41,10 @@ export const validerReinitialisation = [
   motDePasseFort("nouveauMotDePasse"),
   gererValidation,
 ];
+
+export const validerPushToken = [
+  body("token")
+    .custom((valeur) => valeur === null || typeof valeur === "string")
+    .withMessage("Token invalide."),
+  gererValidation,
+];

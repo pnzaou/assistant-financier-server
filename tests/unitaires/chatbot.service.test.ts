@@ -77,11 +77,15 @@ describe("repondreAuMessage", () => {
     // remplacé par le mock de fetch ci-dessous.
     vi.stubEnv("GROK_API_KEY", "cle-factice-pour-les-tests");
 
+    // `text` n'est pas `async` : la méthode ne contient aucun `await`, et la
+    // règle require-await d'ESLint le refuse. `await res.text()` fonctionne
+    // tout aussi bien sur une valeur non-promesse.
     const reponseFictive = {
       ok: true,
-      json: () => ({
-        choices: [{ message: { content: "Réponse de test" } }],
-      }),
+      text: () =>
+        JSON.stringify({
+          choices: [{ message: { content: "Réponse de test" } }],
+        }),
     };
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reponseFictive));
@@ -92,6 +96,63 @@ describe("repondreAuMessage", () => {
     // test suivants.
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+  });
+
+  it("utilise l'endpoint Groq quand la clé commence par gsk_", async () => {
+    // `vi.stubEnv` plutôt qu'une affectation directe à process.env :
+    // `vi.unstubAllEnvs` ne sait restaurer que ce qu'il a lui-même stubbé, une
+    // affectation brute fuiterait dans les fichiers de test suivants.
+    vi.stubEnv("GROK_API_KEY", "gsk_test-cle");
+    vi.stubEnv("GROK_BASE_URL", "");
+
+    listerParPersonneMock.mockResolvedValueOnce([
+      { id: "compte-a", nom: "Compte courant", devise: "EUR", soldeInitial: decimal(0) },
+    ]);
+    listerTransactionsMock.mockResolvedValueOnce({
+      items: [],
+      total: 0,
+    });
+    categorieFindManyMock.mockResolvedValueOnce([]);
+
+    await repondreAuMessage("personne-a", "Bonjour");
+
+    const [url] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("utilise le solde actuel fourni dans le contexte sans le recalculer à partir d'une seule transaction", async () => {
+    listerParPersonneMock.mockResolvedValueOnce([
+      { id: "compte-a", nom: "Compte courant", devise: "XOF", soldeInitial: decimal(500000) },
+    ]);
+    listerTransactionsMock.mockResolvedValueOnce({
+      items: [
+        {
+          id: "txn-a",
+          compteId: "compte-a",
+          montant: 20000,
+          type: "DEPENSE",
+          libelle: "Hôtel",
+          dateOperation: new Date("2026-07-20"),
+        },
+      ],
+      total: 1,
+    });
+    categorieFindManyMock.mockResolvedValueOnce([]);
+
+    await repondreAuMessage("personne-a", "Quel est mon solde actuel ?");
+
+    const payloads = vi.mocked(fetch).mock.calls.map(([, options]) => {
+      const body = options?.body;
+      if (typeof body !== "string") {
+        return { messages: [] as Array<{ content?: string }> };
+      }
+
+      return JSON.parse(body) as { messages?: Array<{ content?: string }> };
+    });
+    const prompt = payloads[0]?.messages?.[1]?.content ?? "";
+
+    expect(prompt).toContain("solde actuel fourni");
+    expect(prompt).toContain("ne recalcule pas un nouveau solde");
   });
 
   it("isole les conversations par utilisateur et ne mélange jamais les données de deux comptes", async () => {
