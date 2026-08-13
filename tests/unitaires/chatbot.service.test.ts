@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // `vi.hoisted` est indispensable ici, et pas seulement stylistique.
 //
@@ -10,11 +10,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // « Cannot access 'categorieFindManyMock' before initialization ».
 //
 // `vi.hoisted` fait évaluer ce bloc avant tout le reste, mocks compris.
-const { listerParPersonneMock, listerTransactionsMock, categorieFindManyMock } = vi.hoisted(() => ({
+const {
+  listerParPersonneMock,
+  listerTransactionsMock,
+  categorieFindManyMock,
+  transactionAggregateMock,
+} = vi.hoisted(() => ({
   listerParPersonneMock: vi.fn(),
   listerTransactionsMock: vi.fn(),
   categorieFindManyMock: vi.fn(),
+  transactionAggregateMock: vi.fn(),
 }));
+
+/**
+ * Prisma renvoie des `Decimal`, pas des nombres : `calculerSolde` appelle
+ * `.toNumber()` sur `soldeInitial`. Un simple littéral numérique dans une
+ * fixture ferait échouer le service sur « toNumber is not a function ».
+ */
+const decimal = (valeur: number) => ({ toNumber: () => valeur });
 
 vi.mock("../../src/repositories/compte.repository.js", () => ({
   listerParPersonne: listerParPersonneMock,
@@ -29,6 +42,14 @@ vi.mock("../../src/config/prisma.js", () => ({
     categorie: {
       findMany: categorieFindManyMock,
     },
+    // `chatbot.service` appelle `calculerSolde`, qui agrège les transactions.
+    // Sans cette entrée, le service échoue sur « Cannot read properties of
+    // undefined (reading 'aggregate') » — le mock doit couvrir tout ce que la
+    // chaîne d'appels touche, pas seulement ce que le service appelle
+    // directement.
+    transaction: {
+      aggregate: transactionAggregateMock,
+    },
   },
 }));
 
@@ -38,6 +59,24 @@ describe("repondreAuMessage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetConversations();
+
+    // Valeurs par défaut, indispensables au SECOND appel du test : rien n'est
+    // mis en file pour « personne-b », qui doit donc obtenir un contexte vide
+    // — c'est précisément ce que le test vérifie. Sans ces défauts, les mocks
+    // renverraient `undefined` et le service planterait sur `comptes.length`.
+    // Les `mockResolvedValueOnce` du test priment pour le premier appel.
+    listerParPersonneMock.mockResolvedValue([]);
+    listerTransactionsMock.mockResolvedValue({ items: [], total: 0 });
+    categorieFindManyMock.mockResolvedValue([]);
+    // Forme exacte renvoyée par Prisma : { _sum: { montant: Decimal | null } }.
+    transactionAggregateMock.mockResolvedValue({ _sum: { montant: null } });
+
+    // Sans clé, le service court-circuite et renvoie « Le service Grok n'est
+    // pas encore configuré » au lieu d'appeler fetch. La CI n'a évidemment pas
+    // de vraie clé : on en stubbe une, l'appel réseau étant de toute façon
+    // remplacé par le mock de fetch ci-dessous.
+    vi.stubEnv("GROK_API_KEY", "cle-factice-pour-les-tests");
+
     const reponseFictive = {
       ok: true,
       json: () => ({
@@ -48,9 +87,16 @@ describe("repondreAuMessage", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reponseFictive));
   });
 
+  afterEach(() => {
+    // Sans ça, la clé et le fetch factices fuiteraient dans les fichiers de
+    // test suivants.
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
   it("isole les conversations par utilisateur et ne mélange jamais les données de deux comptes", async () => {
     listerParPersonneMock.mockResolvedValueOnce([
-      { id: "compte-a", nom: "Compte courant", devise: "EUR" },
+      { id: "compte-a", nom: "Compte courant", devise: "EUR", soldeInitial: decimal(150000) },
     ]);
     listerTransactionsMock.mockResolvedValueOnce({
       items: [
