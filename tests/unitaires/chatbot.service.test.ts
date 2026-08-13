@@ -41,7 +41,16 @@ describe("repondreAuMessage", () => {
       { id: "compte-a", nom: "Compte courant", devise: "EUR" },
     ]);
     listerTransactionsMock.mockResolvedValueOnce({
-      items: [{ id: "txn-a", compteId: "compte-a", montant: 42, type: "DEPENSE", libelle: "Courses", dateOperation: new Date("2026-07-20") }],
+      items: [
+        {
+          id: "txn-a",
+          compteId: "compte-a",
+          montant: 42,
+          type: "DEPENSE",
+          libelle: "Courses",
+          dateOperation: new Date("2026-07-20"),
+        },
+      ],
       total: 1,
     });
     categorieFindManyMock.mockResolvedValueOnce([{ id: "cat-1", nom: "Courses" }]);
