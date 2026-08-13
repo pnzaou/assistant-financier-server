@@ -24,3 +24,9 @@ export async function depensesParCategorie(req: Request, res: Response): Promise
   );
   res.json({ depenses: resultat });
 }
+
+export async function vueEnsemble(req: Request, res: Response): Promise<void> {
+  const utilisateur = utilisateurConnecte(req);
+  const resultat = await dashboardService.obtenirVueEnsemble(utilisateur.id);
+  res.json({ vueEnsemble: resultat });
+}

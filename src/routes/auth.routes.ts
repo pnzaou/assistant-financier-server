@@ -5,6 +5,7 @@ import {
   validerEmailSeul,
   validerJeton,
   validerLogin,
+  validerPushToken,
   validerRegister,
   validerReinitialisation,
 } from "../validators/auth.validator.js";
@@ -27,5 +28,6 @@ authRouter.post(
 // ── Routes authentifiées ─────────────────────────────────────────
 authRouter.get("/moi", middlewareJwt, authController.moi);
 authRouter.post("/renvoyer-verification", middlewareJwt, authController.renvoyerVerification);
+authRouter.put("/push-token", middlewareJwt, validerPushToken, authController.mettreAJourPushToken);
 
 export default authRouter;

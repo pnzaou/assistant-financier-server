@@ -1,12 +1,46 @@
-# CI du serveur Assistant Financier — s'exécute à chaque push et sur chaque pull request.
-# Résultats : onglet "Actions" du repo GitHub (✅/❌ aussi visible sur chaque commit).
+# Pipeline CI/CD du serveur Assistant Financier.
+#
+# Déclenchement (voir CONTRIBUTING.md) :
+#   - push sur main / develop et tags v*  → build, publication de l'image, DAST
+#   - pull request vers main / develop    → toutes les vérifications, sans publication
+#
+# On ne déclenche PAS sur « tous les push » : une PR ouverte depuis une branche
+# du repo lancerait alors deux fois le même pipeline (push + pull_request).
+# Les branches feat/* et fix/* sont donc couvertes par leur PR — ouvrir une PR
+# en brouillon dès le premier commit suffit à avoir du retour en continu.
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main, develop]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Une PR qui reçoit trois commits d'affilée n'occupe pas trois runners : seul le
+# dernier run compte. Sur main/develop en revanche, on laisse finir — le run
+# publie une image dont le déploiement dépend.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_LOCALE: assistant-financier-server:scan
 
 jobs:
-  verifications:
-    name: Types, migrations & schéma
+  # ────────────────────────────────────────────────────────────────
+  # 4c — Automatisation du build
+  # 4d — Tests unitaires et d'intégration
+  # ────────────────────────────────────────────────────────────────
+  qualite:
+    name: Lint, types & tests
     runs-on: ubuntu-latest
 
     # Base PostgreSQL jetable, identique à celle du docker-compose
@@ -30,10 +64,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # SonarCloud a besoin de l'historique pour attribuer les lignes à
+          # leur auteur et calculer le périmètre « nouveau code ».
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Installation des dépendances
@@ -66,14 +104,217 @@ jobs:
 
       # Suite complète : unitaires + API (Supertest sur une base dédiée *_test,
       # créée/migrée/seedée automatiquement par le globalSetup de Vitest).
-      - name: Tests (Vitest + Supertest)
-        run: npm test
+      - name: Tests + couverture (Vitest + Supertest)
+        run: npm run test:coverage
 
-  image-docker:
-    name: Image Docker de production
+      # Récupérée par le job SonarCloud : le relancer les tests là-bas doublerait
+      # le temps de pipeline pour rien.
+      - name: Conservation du rapport de couverture
+        uses: actions/upload-artifact@v4
+        with:
+          name: couverture-serveur
+          path: coverage/lcov.info
+          retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────
+  # 4e — Composition logicielle (SCA)
+  # ────────────────────────────────────────────────────────────────
+  dependances:
+    name: Audit des dépendances
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build de l'image prod
-        run: docker build --target prod -t assistant-financier-server:ci .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Rapport complet (informatif)
+        run: |
+          {
+            echo '## Audit npm'
+            echo '```'
+            npm audit || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Seules les vulnérabilités critiques bloquent : les « high » des
+      # dépendances transitives arrivent plus vite que leurs correctifs et
+      # bloqueraient la CI en permanence. Dependabot ouvre des PR pour le reste.
+      - name: Échec sur vulnérabilité critique
+        run: npm audit --audit-level=critical
+
+  # ────────────────────────────────────────────────────────────────
+  # 4f — Qualimétrie
+  # ────────────────────────────────────────────────────────────────
+  sonarcloud:
+    name: SonarCloud
+    runs-on: ubuntu-latest
+    needs: qualite
+    # Le token n'existe pas sur les PR venant d'un fork : on saute plutôt que
+    # d'échouer sur une erreur d'authentification incompréhensible.
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Récupération de la couverture
+        uses: actions/download-artifact@v4
+        with:
+          name: couverture-serveur
+          path: coverage
+
+      - name: Analyse SonarCloud
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          # `qualitygate.wait` bloque le job tant que Sonar n'a pas rendu son
+          # verdict : sans ça le job passerait au vert avant l'analyse.
+          args: >
+            -Dsonar.qualitygate.wait=true
+
+  # ────────────────────────────────────────────────────────────────
+  # 4b — Containerisation et publication de l'image
+  # ────────────────────────────────────────────────────────────────
+  image:
+    name: Image Docker
+    runs-on: ubuntu-latest
+    needs: qualite
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mise en place de Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Construite localement d'abord : Trivy doit pouvoir la scanner AVANT
+      # qu'elle ne soit publiée.
+      - name: Build de l'image de production
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: prod
+          load: true
+          tags: ${{ env.IMAGE_LOCALE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan de l'image (Trivy) — rapport complet
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_LOCALE }}
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "0"
+
+      - name: Publication du rapport dans l'onglet Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-image
+
+      # Bloquant, mais seulement sur ce qui est corrigeable : une CVE critique
+      # sans correctif amont ne doit pas figer les livraisons.
+      - name: Échec sur CVE critique corrigeable
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_LOCALE }}
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Connexion à GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # develop → tag `develop` (staging) ; main → `main` + `latest` ;
+      # tag v1.2.0 → `1.2.0`, `1.2` et `latest`. Le tag `sha-<commit>` est
+      # toujours produit : c'est lui qu'on épingle dans les manifests K8s.
+      - name: Calcul des tags et labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Rejoue le build depuis le cache : quasi instantané, aucune couche
+      # reconstruite.
+      - name: Publication sur GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: prod
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+
+  # ────────────────────────────────────────────────────────────────
+  # 4e — DAST : l'API est attaquée en boîte noire, telle qu'elle tournera
+  # ────────────────────────────────────────────────────────────────
+  dast:
+    name: DAST (OWASP ZAP)
+    runs-on: ubuntu-latest
+    needs: image
+    # Inutile sur chaque PR : le scan prend plusieurs minutes et l'image
+    # publiée n'existe que sur main/develop.
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clés JWT éphémères
+        run: node scripts/generer-cles.js >> .env.ci
+
+      - name: Démarrage de la stack (image de production)
+        run: |
+          docker compose -f docker-compose.ci.yml --env-file .env.ci up -d --wait
+          echo "API prête :"
+          curl -fsS http://localhost:5000/health
+
+      # `baseline` parcourt l'API sans attaque destructive : adapté à une CI.
+      # Un scan « full » (actif) doit rester manuel, hors pipeline.
+      - name: Scan ZAP (baseline)
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: http://localhost:5000
+          # Règles à ignorer / rétrograder — un en-tête absent sur une API JSON
+          # n'a pas le même poids que sur une page HTML.
+          rules_file_name: .zap/regles.tsv
+          # -a : active aussi les règles passives « alpha ». Pas d'AJAX spider
+          # (-j) : il pilote un navigateur pour du JS, inutile sur une API JSON.
+          cmd_options: "-a"
+          allow_issue_writing: false
+          # Informatif pour l'instant : à passer à `true` une fois les alertes
+          # actuelles traitées, sinon la CI naît déjà rouge.
+          fail_action: false
+
+      - name: Journaux de la stack en cas d'échec
+        if: failure()
+        run: docker compose -f docker-compose.ci.yml logs --no-color
+
+      - name: Arrêt de la stack
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down -v

@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────────
+# Stack éphémère utilisée par la CI pour le scan DAST.
+#
+# On y fait tourner l'IMAGE DE PRODUCTION (target prod), pas le mode dev :
+# scanner autre chose que ce qui sera déployé n'aurait aucune valeur.
+#
+#   node scripts/generer-cles.js > .env.ci
+#   docker compose -f docker-compose.ci.yml --env-file .env.ci up -d --wait
+# ─────────────────────────────────────────────────────────────────
+
+name: assistant-financier-ci
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ci
+      POSTGRES_PASSWORD: ci
+      POSTGRES_DB: assistant_financier
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ci -d assistant_financier"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      target: prod
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://ci:ci@db:5432/assistant_financier?schema=public
+      CLIENT_URLS: http://localhost:5173
+      COOKIE_SECRET: secret-de-ci-jetable
+      # Fournies par --env-file .env.ci (paire RSA générée à chaque run).
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      # Pas de RESEND_API_KEY : les emails partent dans les logs, ce qui est
+      # exactement ce qu'on veut en CI.
+    ports:
+      - "5000:5000"
+    # `docker compose up --wait` s'appuie dessus : sans healthcheck, la CI
+    # attaquerait l'API avant la fin des migrations.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s

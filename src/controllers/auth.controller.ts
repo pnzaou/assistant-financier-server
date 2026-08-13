@@ -119,3 +119,12 @@ export async function moi(req: Request, res: Response): Promise<void> {
   const utilisateur = await authService.profilConnecte(req.utilisateur.id);
   res.json({ utilisateur });
 }
+
+export async function mettreAJourPushToken(req: Request, res: Response): Promise<void> {
+  if (!req.utilisateur) {
+    throw new NonAutoriseException();
+  }
+  const corps = req.body as { token: string | null };
+  await authService.mettreAJourPushToken(req.utilisateur.id, corps.token);
+  res.status(204).send();
+}
