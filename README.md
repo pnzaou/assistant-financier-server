@@ -111,10 +111,16 @@ chaque déploiement** — les régénérer invaliderait tous les tokens émis.
 exacte se retrouve dans les journaux. Les en-têtes `Authorization` et `Cookie`,
 ainsi que tout champ ressemblant à un mot de passe ou un jeton, sont masqués.
 
-En développement, la sortie est colorée via `pino-pretty` ; en production, du
-JSON brut. `pino-pretty` est une dépendance de dev — le transport ne doit
-**jamais** être activé quand `NODE_ENV=production`, l'image étant construite
-avec `npm ci --omit=dev`.
+La sortie est du JSON brut par défaut. `LOG_PRETTY=true` active `pino-pretty`
+pour une lecture confortable en local — le `docker-compose.yml` de dev le pose
+déjà.
+
+Ce drapeau est un opt-in **explicite**, et non une déduction depuis `NODE_ENV` :
+`pino-pretty` est une dépendance de dev, absente de l'image de production, mais
+rien n'oblige cette image à tourner avec `NODE_ENV=production`. La stack e2e la
+démarre justement en `development` pour que les cookies fonctionnent en HTTP —
+et le serveur plantait alors au démarrage sur « unable to determine transport
+target ».
 
 Les sondes (`/health`, `/metrics`) ne sont pas journalisées : à 10 s
 d'intervalle par pod, elles noieraient le trafic réel.
@@ -128,6 +134,7 @@ signal et retire le pod des Endpoints en parallèle, pas l'un après l'autre.
 | Variable             | Défaut                        | Rôle                               |
 | -------------------- | ----------------------------- | ---------------------------------- |
 | `LOG_LEVEL`          | `info` en prod, `debug` sinon | Verbosité                          |
+| `LOG_PRETTY`         | `false`                       | Sortie colorée via pino-pretty     |
 | `DELAI_DRAINAGE_MS`  | `5000`                        | Attente avant fermeture du serveur |
 | `DELAI_ARRET_MAX_MS` | `25000`                       | Au-delà, sortie forcée             |
 
