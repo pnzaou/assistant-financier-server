@@ -308,7 +308,7 @@ jobs:
       # `baseline` parcourt l'API sans attaque destructive : adapté à une CI.
       # Un scan « full » (actif) doit rester manuel, hors pipeline.
       - name: Scan ZAP (baseline)
-        uses: zaproxy/action-baseline@v0.14.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: http://localhost:5000
           # Règles à ignorer / rétrograder — un en-tête absent sur une API JSON
