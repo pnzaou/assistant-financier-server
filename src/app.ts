@@ -170,7 +170,7 @@ app.use("/api/v1", appRouter);
 
 // Après toutes les routes : 404 JSON propre pour les URLs inconnues...
 app.use((_req, res) => {
-  res.status(404).json({ message: "Oups, Route introuvable. Aurevoir." });
+  res.status(404).json({ message: "Route introuvable." });
 });
 
 // ...et le filet final : exceptions métier → bon statut, imprévus → 500 loggé.
