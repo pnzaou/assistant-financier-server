@@ -210,7 +210,7 @@ jobs:
       # Construite localement d'abord : Trivy doit pouvoir la scanner AVANT
       # qu'elle ne soit publiée.
       - name: Build de l'image de production
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: prod
@@ -272,7 +272,7 @@ jobs:
       # reconstruite.
       - name: Publication sur GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: prod
