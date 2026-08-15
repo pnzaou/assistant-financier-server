@@ -155,9 +155,20 @@ jobs:
     name: SonarCloud
     runs-on: ubuntu-latest
     needs: qualite
-    # Le token n'existe pas sur les PR venant d'un fork : on saute plutôt que
-    # d'échouer sur une erreur d'authentification incompréhensible.
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    # Deux raisons de sauter ce job.
+    #
+    # 1. Les PR venant d'un fork n'ont pas accès au token : on saute plutôt que
+    #    d'échouer sur une erreur d'authentification incompréhensible.
+    # 2. Le plan gratuit de SonarCloud n'autorise que la branche PRINCIPALE du
+    #    projet et les pull requests. Sur toute autre branche, l'analyse est
+    #    bien téléversée mais la LECTURE du Quality Gate est refusée
+    #    (« Not authorized or project not found »), ce qui fait échouer le job
+    #    sans qu'aucun problème de qualité n'existe.
+    #    `develop` doit donc être déclarée branche principale côté SonarCloud —
+    #    c'est bien elle qui reçoit l'intégration continue.
+    if: >-
+      ${{ !github.event.pull_request.head.repo.fork
+      && (github.event_name == 'pull_request' || github.ref == 'refs/heads/develop') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -170,7 +181,7 @@ jobs:
           path: coverage
 
       - name: Analyse SonarCloud
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
@@ -318,3 +329,32 @@ jobs:
       - name: Arrêt de la stack
         if: always()
         run: docker compose -f docker-compose.ci.yml down -v
+
+  # ────────────────────────────────────────────────────────────────
+  # 4h — Déclenchement du déploiement continu
+  # ────────────────────────────────────────────────────────────────
+  declencher-deploiement:
+    name: Déclencher le déploiement
+    runs-on: ubuntu-latest
+    needs: image
+    # Uniquement sur develop, et uniquement sur un push : une pull request
+    # construit et scanne l'image mais ne la publie pas — il n'y aurait rien
+    # à déployer.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    steps:
+      # Le GITHUB_TOKEN est limité à CE dépôt : il ne peut pas déclencher un
+      # workflow ailleurs. D'où un jeton dédié, à créer avec la portée `repo`
+      # et à stocker dans le secret JETON_DECLENCHEMENT_INFRA.
+      - name: Appeler le workflow de déploiement du dépôt infra
+        env:
+          JETON: ${{ secrets.JETON_DECLENCHEMENT_INFRA }}
+        run: |
+          if [ -z "$JETON" ]; then
+            echo "::error title=Secret manquant::JETON_DECLENCHEMENT_INFRA n'est pas configuré. Le déploiement ne peut pas être déclenché."
+            exit 1
+          fi
+          # `type=sha` produit un sha COURT (7 caractères) : le tag doit
+          # correspondre exactement à celui publié sur GHCR.
+          TAG="sha-$(echo "${{ github.sha }}" | cut -c1-7)"
+          echo "Déploiement demandé pour le tag $TAG"
+          curl --fail --silent --show-error -X POST             -H "Authorization: token $JETON"             -H "Accept: application/vnd.github+json"             https://api.github.com/repos/pnzaou/assistant-financier-infra/dispatches             -d "{\"event_type\":\"deployer\",\"client_payload\":{\"environnement\":\"staging\",\"tag_serveur\":\"$TAG\"}}"
