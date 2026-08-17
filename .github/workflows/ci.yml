@@ -205,7 +205,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Mise en place de Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Construite localement d'abord : Trivy doit pouvoir la scanner AVANT
       # qu'elle ne soit publiée.
