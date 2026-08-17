@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Initialisation de CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
           # `security-and-quality` ajoute les règles de maintenabilité aux
@@ -41,6 +41,6 @@ jobs:
 
       # Pas de build : CodeQL analyse directement les sources TypeScript.
       - name: Analyse
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:javascript-typescript"
