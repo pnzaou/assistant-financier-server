@@ -258,7 +258,7 @@ jobs:
       # toujours produit : c'est lui qu'on épingle dans les manifests K8s.
       - name: Calcul des tags et labels
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
