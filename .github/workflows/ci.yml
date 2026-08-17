@@ -63,7 +63,7 @@ jobs:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/assistant_financier_ci?schema=public
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # SonarCloud a besoin de l'historique pour attribuer les lignes à
           # leur auteur et calculer le périmètre « nouveau code ».
@@ -123,7 +123,7 @@ jobs:
     name: Audit des dépendances
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -170,7 +170,7 @@ jobs:
       ${{ !github.event.pull_request.head.repo.fork
       && (github.event_name == 'pull_request' || github.ref == 'refs/heads/develop') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -202,7 +202,7 @@ jobs:
       packages: write
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Mise en place de Buildx
         uses: docker/setup-buildx-action@v3
@@ -294,7 +294,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Clés JWT éphémères
         run: node scripts/generer-cles.js >> .env.ci
